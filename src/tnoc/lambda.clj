@@ -120,7 +120,7 @@
                    (into inner-params))]
     (list 'fn params body)))
 
-(defn normalize-simplify [form fully?]
+(defn normalize-simplified [form fully?]
   "Like `normalize` but also tries to normalize bodies of abstractions."
   (loop [next (zip/seq-zip (normalize form fully?))]
     (cond
@@ -144,9 +144,9 @@
 
 (defn normal-form-simplified [form]
   "Like `normal-form` but also tries to normalize bodies of abstractions."
-  (normalize-simplify form true))
+  (normalize-simplified form true))
 
-(defn normal-form-simplified? [form] (= form (normalize-simplify form false)))
+(defn normal-form-simplified? [form] (= form (normalize-simplified form false)))
 
 (defn normal-form-reductions [form]
   "Produces a lazy seq of reductions on the path to normal form."
@@ -154,7 +154,7 @@
 
 (defn normal-form-reductions-simplified [form]
   "Like `normal-form-reductions` but also tries to normalize bodies of abstractions."
-  (reductions #(if (normal-form-simplified? %2) (reduced %2) %2) (iterate #(normalize-simplify % false) form)))
+  (reductions #(if (normal-form-simplified? %2) (reduced %2) %2) (iterate #(normalize-simplified % false) form)))
 
 (defn println-reductions [form]
   "Like `normal-form-reductions` but printlns the reductions with line numbers instead."
