@@ -91,7 +91,6 @@
 (def normalize
   "Takes a form to be normalized and a boolean flag `fully?` indicating whether only the next step is to be performed or
   if the final normal form is to be found."
-  ^:private
   (memoize
     (fn [form fully?]
       (cond
@@ -121,10 +120,12 @@
                    (into inner-params))]
     (list 'fn params body)))
 
-(defn- normalize-simplify [form fully?]
+(defn normalize-simplify [form fully?]
   "Like `normalize` but also tries to normalize bodies of abstractions."
-  (loop [next (zip/seq-zip (normal-form form))]
+  (loop [next (zip/seq-zip (normalize form fully?))]
     (cond
+      (and (not fully?) (not= form (zip/node next))) (zip/node next)
+
       (zip/end? next) (zip/root next)
 
       (mergeable-abstractions? (zip/node next))
@@ -145,15 +146,15 @@
   "Like `normal-form` but also tries to normalize bodies of abstractions."
   (normalize-simplify form true))
 
-(defn normal-form-simplified? [form] (= form (normalize-simplify form true)))
+(defn normal-form-simplified? [form] (= form (normalize-simplify form false)))
 
 (defn normal-form-reductions [form]
   "Produces a lazy seq of reductions on the path to normal form."
-  (reductions #(if (= %1 %2) (reduced %1) %2) (iterate #(normalize % false) form)))
+  (reductions #(if (normal-form? %2) (reduced %2) %2) (iterate #(normalize % false) form)))
 
 (defn normal-form-reductions-simplified [form]
   "Like `normal-form-reductions` but also tries to normalize bodies of abstractions."
-  (reductions #(if (= %1 %2) (reduced %1) %2) (iterate #(normalize-simplify % false) form)))
+  (reductions #(if (normal-form-simplified? %2) (reduced %2) %2) (iterate #(normalize-simplify % false) form)))
 
 (defn println-reductions [form]
   "Like `normal-form-reductions` but printlns the reductions with line numbers instead."
@@ -168,6 +169,10 @@
 (defn unchurch [church-numeral]
   "Inverse of `church`. Will also attempt to invert church numerals not in the standard form '(fn [f x] (f (f (...f x)...)))"
   (eval (list (normal-form-simplified church-numeral) inc 0)))
+
+
+; Predefined forms. Extensive use of namespace-qualification is made to minimize issues caused by attempting
+; resolution in the wrong namespace.
 
 (def I '(fn [x] x))
 
@@ -207,9 +212,12 @@
 
 (def ZERO? `(~'fn [~'n] (~'n (~'fn [~'x] F) T)))
 
+(def Y '(fn [f] ((fn [x] (f (x x))) (fn [x] (f (x x))))))
+
+; The Mockingbird. Thanks Raymond Smullyan.
 (def M '(fn [x] (x x)))
 
-(def Y `(~'fn [~'f] (M (COMP ~'f M))))
+(def Y' `(~'fn [~'f] (M (COMP ~'f M))))
 
 (def FAC `(Y (~'fn [~'fac ~'n] ((ZERO? ~'n) 1 (MULT ~'n (~'fac (PRED ~'n)))))))
 

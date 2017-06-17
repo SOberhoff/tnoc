@@ -1,6 +1,6 @@
-(defproject tnoc "0.1.0-SNAPSHOT"
-  :description "FIXME: write description"
-  :url "http://example.com/FIXME"
+(defproject tnoc "0.1.0"
+  :description "Clojure code inspired by The Nature of Computation by Cristopher Moore & Stephan Mertens"
+  :url "https://github.com/SOberhoff/tnoc"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.9.0-alpha12"]
