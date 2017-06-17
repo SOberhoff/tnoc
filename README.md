@@ -98,8 +98,7 @@ for `f` in a form such as `(fn [f x] ...)`.)
 While these forms look extremely similar to Clojure code, they aren't immediately executable through Clojure's `eval`. The
 core differences are:
 * Lambda forms are curried. `((fn [x y] x) a)` becomes `(fn [y] a)`, whereas Clojure will throw an `ArityException`.
-* Lambda forms are lazy. `(Y (Y f) x)` substitutes `(Y f)` into `Y` at the next step, but Clojure will first evaluate `(Y f)`,
-which in the case of the Y-combinator leads to infinite recursion.
+* Lambda forms are lazy. `(f (Y f) x)` substitutes `(Y f)` into `f` at the next step (assuming `f` is an abstraction), but Clojure will first evaluate `(Y f)`, which in the case of the Y-combinator leads to infinite recursion.
 * If you're using integers to stand for Church numerals they'll often result in forms such as `(0 x)`, which Clojure can't
 evaluate because `0` isn't a function.
 
