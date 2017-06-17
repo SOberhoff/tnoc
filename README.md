@@ -1,3 +1,5 @@
+[![Clojars Project](https://img.shields.io/clojars/v/tnoc.svg)](https://clojars.org/tnoc)
+
 # tnoc
 Clojure code inspired by The Nature of Computation by Cristopher Moore &amp; Stephan Mertens
 
