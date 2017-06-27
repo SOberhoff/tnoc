@@ -124,7 +124,7 @@
   "Like `normalize` but also tries to normalize bodies of abstractions."
   (loop [next (zip/seq-zip (normalize form fully?))]
     (cond
-      (and (not fully?) (not= form (zip/node next))) (zip/node next)
+      (and (not fully?) (not= form (zip/root next))) (zip/root next)
 
       (zip/end? next) (zip/root next)
 
