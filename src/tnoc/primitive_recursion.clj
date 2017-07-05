@@ -3,8 +3,6 @@
             [clojure.walk :as walk]
             [clojure.spec :as spec]
             [clojure.spec.test :as stest]
-            [tnoc.primitive-recursion :refer :all]
-            [clojure.tools.trace :refer [trace]]
             [com.rpl.specter :as spt]))
 
 (load "primitive_recursion_spec")
@@ -24,11 +22,7 @@
         reducing-fn-body (make-reducing-fn-body name recur-param current index recur-body)
         base-call `(~name ~@(spt/setval [spt/LAST] 0 modified-recur-params))
         reducing-fn-sym (gensym)]
-    (eval `(def ~reducing-fn-sym
-             (memoize
-               (fn ~modified-recur-params
-                 (memoize (fn [~current ~index] ~reducing-fn-body))))))
-    `(reduce (apply ~reducing-fn-sym ~modified-recur-params) ~base-call (range ~recur-param))))
+    `(reduce (fn [~current ~index] ~reducing-fn-body) ~base-call (range ~recur-param))))
 
 (defn modify-recur [name recur-params recur-body]
   (if (= '_ (last recur-params))
@@ -93,6 +87,8 @@
 (primrec lg-rec
          [_ 0] 0
          [x (S y)] (add (mult (leq (exp (S (S 0)) (S y)) x) (S y))
-                        (mult (even (leq (exp (S (S 0)) (S y)) x)) (lg-rec x y))))
+                        (mult (Z? (leq (exp (S (S 0)) (S y)) x)) (lg-rec x y))))
 
 (primrec lg [x] (lg-rec x x))
+
+(map even (range 10))
