@@ -5,7 +5,6 @@
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as tcgen]
             [clojure.test.check.properties :as tcprop]
-            [tnoc.lambda :refer :all]
             [clojure.math.numeric-tower :refer [expt]]))
 
 (defspec add-test 100

@@ -9,37 +9,24 @@
 
 (defn S-to-inc [body] (walk/prewalk-replace {'S 'inc} body))
 
-(defn make-reducing-fn-body [name recur-param current index recur-body]
-  (walk/prewalk #(cond (= % recur-param) index
-                       (and (seq? %) (= name (first %))) current
-                       :else %)
-                recur-body))
-
-(defn make-reducing-fn [name modified-recur-params recur-body]
-  (let [recur-param (last modified-recur-params)
-        current (gensym)
-        index (gensym)
-        reducing-fn-body (make-reducing-fn-body name recur-param current index recur-body)
-        base-call `(~name ~@(spt/setval [spt/LAST] 0 modified-recur-params))
-        reducing-fn-sym (gensym)]
-    `(reduce (fn [~current ~index] ~reducing-fn-body) ~base-call (range ~recur-param))))
-
-(defn modify-recur [name recur-params recur-body]
-  (if (= '_ (last recur-params))
+(defn modify-recur [recur-params recur-body]
+  (if (#{'_} (last recur-params))
     [recur-params (S-to-inc recur-body)]
-    (let [modified-recur-params (spt/transform [spt/LAST] second recur-params)]
-      [modified-recur-params (make-reducing-fn name modified-recur-params (S-to-inc recur-body))])))
+    (let [modified-recur-params (spt/transform [spt/LAST] second recur-params)
+          recur-param (second (last recur-params))
+          modified-recur-body (walk/postwalk-replace {recur-param (list 'dec recur-param)}
+                                                     (S-to-inc recur-body))]
+      [modified-recur-params modified-recur-body])))
 
 (defmacro primrec
   ([name params body]
    `(defn ~(vary-meta name assoc :primrec true) ~params ~(S-to-inc body)))
   ([name base-params base-body recur-params recur-body]
-   (let [gen-params (into [] (repeatedly (count base-params) gensym))
-         [modified-recur-params modified-recur-body] (modify-recur name recur-params recur-body)]
+   (let [gen-params (into [] (repeatedly (count base-params) gensym))]
      `(defn ~(vary-meta name assoc :primrec true) ~gen-params
         (match ~gen-params
-               ~base-params ~(walk/prewalk #(if (#{'S} %) 'inc %) base-body)
-               ~modified-recur-params ~modified-recur-body)))))
+               ~base-params ~(S-to-inc base-body)
+               ~@(modify-recur recur-params recur-body))))))
 
 (primrec add
          [x 0] x
@@ -51,7 +38,7 @@
 
 (primrec mult
          [x 0] 0
-         [x (S y)] (add (mult x y) x))
+         [x (S y)] (add x (mult x y)))
 
 (primrec exp
          [x 0] (S 0)
@@ -72,9 +59,16 @@
 (primrec leq
          [x y] (pos (sub (S y) x)))
 
+(primrec grt
+         [x y] (pos (sub x y)))
+
 (primrec Z?
          [0] (S 0)
          [_] 0)
+
+(primrec select
+         [x y 0] x
+         [x y _] y)
 
 (primrec even
          [0] (S 0)
@@ -85,10 +79,7 @@
          [(S x)] (add (even (S x)) (div2 x)))
 
 (primrec lg-rec
-         [_ 0] 0
-         [x (S y)] (add (mult (leq (exp (S (S 0)) (S y)) x) (S y))
-                        (mult (Z? (leq (exp (S (S 0)) (S y)) x)) (lg-rec x y))))
+         [x 0] (S 0)
+         [x (S y)] (select (lg-rec x y) (sub x (S (S y))) (grt (exp (S (S 0)) (sub x (S y))) x)))
 
 (primrec lg [x] (lg-rec x x))
-
-(map even (range 10))
