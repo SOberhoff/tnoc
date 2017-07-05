@@ -1,3 +1,5 @@
+(in-ns 'tnoc.lambda)
+
 (spec/def ::symbol (spec/with-gen symbol? #(gen/fmap (comp symbol str) (spec/gen char?))))
 
 (spec/def ::params (spec/coll-of ::symbol, :kind vector?, :distinct true, :gen-max 3))
@@ -24,7 +26,7 @@
            :ret (spec/coll-of ::symbol :kind set?))
 
 (spec/fdef apply-abstraction
-           ;:args (spec/cat :operator ::abstraction, :operand ::form)
+           :args (spec/cat :operator ::abstraction, :operand ::form)
            :ret ::form)
 
 (spec/fdef church
