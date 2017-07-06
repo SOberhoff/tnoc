@@ -1,19 +1,31 @@
 (in-ns 'tnoc.primitive-recursion)
 
-(spec/def ::base-params (spec/cat :params (spec/* symbol?)
-                                  :last-param (spec/? #{0})))
+(spec/def ::var (spec/and symbol? (comp not #{'_})))
 
-(spec/def ::recur-params (spec/cat :non-recur (spec/* symbol?)
-                                   :recur (spec/? (spec/spec (spec/cat :S #{'S} :var symbol?)))))
+(spec/def ::default-params (spec/coll-of symbol? :kind vector?))
 
-(spec/def ::body (spec/alt :zero #{0}
-                           :var symbol?
-                           :fn-call (spec/spec (spec/cat :fn symbol? :args (spec/* ::body)))))
+(spec/def ::base-params
+  (spec/spec (spec/cat :params (spec/* symbol?)
+                       :last-param #{0})))
+
+(spec/def ::recur-params
+  (spec/spec
+    (spec/cat :non-recur (spec/* symbol?)
+              :recur (spec/or :S (spec/cat :S #{'S}
+                                           :var (spec/and symbol? (comp not #{'_})))
+                              :blank #{'_}))))
+
+(spec/def ::body
+  (spec/alt :zero #{0}
+            :var symbol?
+            :fn-call (spec/spec (spec/cat :fn symbol? :args (spec/* ::body)))))
 
 (spec/fdef primrec
            :args (spec/cat :name symbol?
-                           :base-params (spec/spec ::base-params)
-                           :base-body ::body
-                           :recur (spec/? (spec/cat :recur-params (spec/spec ::recur-params)
-                                                    :recur-body ::body)))
+                           :clauses (spec/alt :default (spec/cat :default-params ::default-params
+                                                                 :body ::body)
+                                              :recur (spec/cat :base-params ::base-params
+                                                               :base-body ::body
+                                                               :recur-params ::recur-params
+                                                               :recur-body ::body)))
            :ret any?)
