@@ -57,13 +57,27 @@
                          (= (if (zero? x) 0 (int (/ (Math/log x) (Math/log 2)))) (lg x))))
 
 (defspec triangle-test
-         (tcprop/for-all [x (tcgen/choose 0 200)]
+         (tcprop/for-all [x (tcgen/choose 0 50)]
                          (= (reduce + (range (inc x))) (triangle x))))
 
+(defspec inv-triangle-test
+         (tcprop/for-all [x (tcgen/choose 0 100)]
+                         (= (dec (count (take-while #(<= % x) (reductions + (range (inc x))))))
+                            (inv-triangle x))))
+
 (defspec pair-test
-         (tcprop/for-all [a (tcgen/choose 0 200)
-                          b (tcgen/choose 0 200)
-                          c (tcgen/choose 0 200)
-                          d (tcgen/choose 0 200)]
+         (tcprop/for-all [a (tcgen/choose 0 25)
+                          b (tcgen/choose 0 25)
+                          c (tcgen/choose 0 25)
+                          d (tcgen/choose 0 25)]
                          (or (= [a b] [c d]) (not= (pair a b) (pair c d)))))
 
+(defspec left-test
+         (tcprop/for-all [x (tcgen/choose 0 25)
+                          y (tcgen/choose 0 25)]
+                         (= x (left (pair x y)))))
+
+(defspec right-test
+         (tcprop/for-all [x (tcgen/choose 0 25)
+                          y (tcgen/choose 0 25)]
+                         (= y (right (pair x y)))))

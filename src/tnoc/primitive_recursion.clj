@@ -87,7 +87,9 @@
 
 (primrec lg-rec
          [x 0] (pred x)
-         [x (S y)] (select (lg-rec x y) (sub x (S (S y))) (grt (exp (S (S 0)) (sub x (S y))) x)))
+         [x (S y)] (select (lg-rec x y)
+                           (sub x (S (S y)))
+                           (grt (exp (S (S 0)) (sub x (S y))) x)))
 
 (primrec lg [x] (lg-rec x x))
 
@@ -95,5 +97,21 @@
          [0] 0
          [(S x)] (add (triangle x) (S x)))
 
+(primrec inv-triangle-rec
+         [x 0] (select x
+                       (pred x)
+                       (grt (triangle x) x))
+         [x (S y)] (select (inv-triangle-rec x y)
+                           (sub x (S (S y)))
+                           (grt (triangle (sub x (S y))) x)))
+
+(primrec inv-triangle [x] (inv-triangle-rec x x))
+
 (primrec pair
          [x y] (add (triangle (add x y)) y))
+
+(primrec left
+         [x] (sub (inv-triangle x) (sub x (triangle (inv-triangle x)))))
+
+(primrec right
+         [x] (sub x (triangle (inv-triangle x))))
