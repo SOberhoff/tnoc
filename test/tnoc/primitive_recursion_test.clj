@@ -56,4 +56,14 @@
          (tcprop/for-all [x (tcgen/choose 0 1000)]
                          (= (if (zero? x) 0 (int (/ (Math/log x) (Math/log 2)))) (lg x))))
 
-(lg-test)
+(defspec triangle-test
+         (tcprop/for-all [x (tcgen/choose 0 200)]
+                         (= (reduce + (range (inc x))) (triangle x))))
+
+(defspec pair-test
+         (tcprop/for-all [a (tcgen/choose 0 200)
+                          b (tcgen/choose 0 200)
+                          c (tcgen/choose 0 200)
+                          d (tcgen/choose 0 200)]
+                         (or (= [a b] [c d]) (not= (pair a b) (pair c d)))))
+
