@@ -7,6 +7,8 @@
 
 (load "primitive_recursion_spec")
 
+(defn S-to-inc [body] (walk/postwalk-replace {'S 'inc} body))
+
 (defn delay-force [body]
   (if-not (seq? body)
     `(force ~body)
@@ -18,8 +20,6 @@
               :else %))
          (list `force))))
 
-(defn S-to-inc [body] (walk/postwalk-replace {'S 'inc} body))
-
 (defn modify-recur [recur-params recur-body]
   (if (#{'_} (last recur-params))
     [recur-params recur-body]
@@ -30,11 +30,11 @@
 
 (defmacro primrec
   ([name params body]
-   `(defn ~(vary-meta name assoc :primrec true) ~params ~(delay-force (S-to-inc body))))
+   `(defn ~name ~params ~(delay-force (S-to-inc body))))
   ([name base-params base-body recur-params recur-body]
    (let [gen-params (into [] (repeatedly (count base-params) gensym))
          [modified-recur-params modified-recur-body] (modify-recur recur-params recur-body)]
-     `(defn ~(vary-meta name assoc :primrec true) ~gen-params
+     `(defn ~name ~gen-params
         (match ~(spt/transform [spt/LAST] #(list `force %) gen-params)
                ~base-params ~(delay-force (S-to-inc base-body))
                ~modified-recur-params ~(delay-force (S-to-inc modified-recur-body)))))))
@@ -86,7 +86,7 @@
          [(S x)] (add (even (S x)) (div2 x)))
 
 (primrec lg-rec
-         [x 0] (S 0)
+         [x 0] (pred x)
          [x (S y)] (select (lg-rec x y) (sub x (S (S y))) (grt (exp (S (S 0)) (sub x (S y))) x)))
 
 (primrec lg [x] (lg-rec x x))
@@ -97,5 +97,3 @@
 
 (primrec pair
          [x y] (add (triangle (add x y)) y))
-
-
