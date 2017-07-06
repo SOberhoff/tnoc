@@ -23,7 +23,7 @@
   (is (= T (normal-form `(OR T F))))
   (is (= T (normal-form `(OR T T)))))
 
-(defspec succ-test 100
+(defspec succ-test
          (tcprop/for-all [(tcgen/choose 0 1000)]
                          #(= (inc %) (unchurch (normal-form `(SUCC ~%))))))
 
@@ -47,22 +47,22 @@
          (tcprop/for-all [x (tcgen/choose 0 4) y (tcgen/choose 1 4)]
                          (= (expt x y) (unchurch (normal-form `(EXP ~x ~y))))))
 
-(defspec first-test 100
+(defspec first-test
          (tcprop/for-all [x (tcgen/choose 0 100) y (tcgen/choose 0 100)]
                          (= x (unchurch (normal-form `(FIRST (PAIR ~x ~y)))))))
 
-(defspec second-test 100
+(defspec second-test
          (tcprop/for-all [x (tcgen/choose 0 100) y (tcgen/choose 0 100)]
                          (= y (unchurch (normal-form `(SECOND (PAIR ~x ~y)))))))
 
-(defspec pred-test 100
+(defspec pred-test
          (tcprop/for-all [(tcgen/choose 0 100)]
                          #(= (dec %) (unchurch (normal-form `(PRED ~%))))))
 
 (deftest zero-test
   (is (= T (normal-form `(ZERO? 0)))))
 
-(defspec not-zero-test 100
+(defspec not-zero-test
          (tcprop/for-all [(tcgen/choose 1 100)]
                          #(= F (normal-form `(ZERO? ~%)))))
 

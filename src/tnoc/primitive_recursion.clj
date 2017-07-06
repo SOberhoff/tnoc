@@ -97,3 +97,5 @@
 
 (primrec pair
          [x y] (add (triangle (add x y)) y))
+
+
