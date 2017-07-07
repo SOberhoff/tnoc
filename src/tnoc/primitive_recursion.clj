@@ -2,14 +2,14 @@
   (:require [clojure.core.match :refer [match]]
             [clojure.walk :as walk]
             [clojure.spec :as spec]
-            [clojure.spec.test :as stest]
             [com.rpl.specter :as spt]))
 
 (load "primitive_recursion_spec")
 
-(defn S-to-inc [body] (walk/postwalk-replace {'S 'inc} body))
+(defn- S-to-inc [body] (walk/postwalk-replace {'S 'inc} body))
 
-(defn delay-force [body]
+(defn- delay-force [body]
+  "Makes the body-expression lazy by inserting `delay` and `force` as appropriate."
   (if-not (seq? body)
     `(force ~body)
     (->> body
@@ -20,20 +20,30 @@
               :else %))
          (list `force))))
 
-(defn modify-recur [recur-params recur-body]
-  (if (#{'_} (last recur-params))
-    [recur-params recur-body]
-    (let [modified-recur-params (spt/transform [spt/LAST] second recur-params)
-          recur-param (second (last recur-params))
-          modified-recur-body (walk/postwalk-replace {recur-param (list 'dec recur-param)} recur-body)]
-      [modified-recur-params modified-recur-body])))
+(defn- S-to-dec [recur-params recur-body]
+  "Converts a recursive case `[(S x)] (f x)` into `[x] (f (dec x))`."
+  (let [last-param (last recur-params)
+        recur-param (if (seq? last-param) (second last-param) last-param)]
+    [(spt/setval [spt/LAST] recur-param recur-params)
+     (walk/postwalk-replace {recur-param (list 'dec recur-param)} recur-body)]))
 
 (defmacro primrec
+  "Allows the definition of primitive recursive functions in a more succinct manner.
+  `primrec` expects either a simple function definition via parameters and a body or
+  a recursive function definition using a base case and a recursive case. In the latter
+  case the last parameter of the base case must be `0` and the last parameter of the
+  recursive case must be `(S x)` for some variable `x`.
+  Any unused parameter except for the `0` in the base case of a recursive definition
+  should be replaced by `_`.
+  Furthermore `primrec` delays computation of arguments until actually needed. So
+  `(f 0 (lifetime-of-the-universe))` will run much faster if `f` never uses its
+   second argument. (Note that if `f` is recursive `(lifetime-of-the-universe)` must
+   be forced to determine whether to apply the base case or recursive case.)"
   ([name params body]
    `(defn ~name ~params ~(delay-force (S-to-inc body))))
   ([name base-params base-body recur-params recur-body]
    (let [gen-params (into [] (repeatedly (count base-params) gensym))
-         [modified-recur-params modified-recur-body] (modify-recur recur-params recur-body)]
+         [modified-recur-params modified-recur-body] (S-to-dec recur-params recur-body)]
      `(defn ~name ~gen-params
         (match ~(spt/transform [spt/LAST] #(list `force %) gen-params)
                ~base-params ~(delay-force (S-to-inc base-body))
@@ -63,10 +73,12 @@
          [0] 0
          [_] (S 0))
 
-(primrec leq
+(primrec ^{:doc "less than or equal"}
+         leq
          [x y] (pos (sub (S y) x)))
 
-(primrec grt
+(primrec ^{:doc "strictly greater"}
+         grt
          [x y] (pos (sub x y)))
 
 (primrec Z?
@@ -74,14 +86,15 @@
          [_] 0)
 
 (primrec select
-         [x y 0] x
-         [x y _] y)
+         [x _ 0] x
+         [_ y _] y)
 
 (primrec even
          [0] (S 0)
          [(S x)] (Z? (even x)))
 
-(primrec div2
+(primrec ^{:doc "floor of x/2"}
+         div2
          [0] 0
          [(S x)] (add (even (S x)) (div2 x)))
 
@@ -91,9 +104,11 @@
                            (sub x (S (S y)))
                            (grt (exp (S (S 0)) (sub x (S y))) x)))
 
-(primrec lg [x] (lg-rec x x))
+(primrec ^{:doc "floor of base 2 logarithm"}
+         lg [x] (lg-rec x x))
 
-(primrec triangle
+(primrec ^{:doc "trianlge numbers: n*(n-1)/2"}
+         triangle
          [0] 0
          [(S x)] (add (triangle x) (S x)))
 
@@ -105,7 +120,8 @@
                            (sub x (S (S y)))
                            (grt (triangle (sub x (S y))) x)))
 
-(primrec inv-triangle [x] (inv-triangle-rec x x))
+(primrec ^{:doc "inverse of the next smaller or equal triangle number"}
+         inv-triangle [x] (inv-triangle-rec x x))
 
 (primrec pair
          [x y] (add (triangle (add x y)) y))
