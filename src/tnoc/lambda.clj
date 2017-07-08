@@ -5,7 +5,8 @@
             [com.rpl.specter :as spt]
             [clojure.core.match :refer [match]]
             [clojure.walk :as walk]
-            [clojure.set :as set]))
+            [clojure.set :as set]
+            [clojure.string :as str]))
 
 (load "lambda_spec")
 
@@ -170,6 +171,12 @@
   "Inverse of `church`. Will also attempt to invert church numerals not in the standard form '(fn [f x] (f (f (...f x)...)))"
   (eval (list (normal-form-simplified church-numeral) inc 0)))
 
+(defn resolve-references [form]
+  "Replaces all references with their definitions and integers with their Church numerals."
+  (walk/prewalk #(cond
+                   (get-symbol %) (get-symbol %)
+                   (integer? %) (church %)
+                   :else %) form))
 
 ; Predefined forms. Extensive use of namespace-qualification is made to minimize issues caused by attempting
 ; resolution in the wrong namespace.
