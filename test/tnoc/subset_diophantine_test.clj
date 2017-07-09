@@ -34,37 +34,41 @@
                                 qs :qs} (subset-diophantine-constants weights 0)]
                            (every? #(not (multiple? H %)) qs))))
 
-(defspec lemma-5-1-test
-         (tcprop/for-all [weights (tcgen/vector tcgen/s-pos-int 1 3)
-                          target tcgen/s-pos-int]
+(defspec lemma-5-1-test 10
+         (tcprop/for-all [weights (tcgen/vector (tcgen/resize 4 tcgen/s-pos-int) 1 2)
+                          target (tcgen/resize 10 tcgen/s-pos-int)]
                          (= (subset-sum? weights target)
                             (let [{H          :H
                                    K          :K
                                    s          :s
                                    two-to-m+1 :two-to-m+1}
                                   (subset-diophantine-constants weights target)]
-                              (reduce (fn [_ next]
-                                        (if (and (multiple? (-' ('* H H) ('* next next)) K)
-                                                 (multiple? (-' ('* s s) ('* next next)) two-to-m+1))
+                              (reduce (fn [_ x]
+                                        (if (and (multiple? (-' (*' H H) (*' x x)) K)
+                                                 (multiple? (-' (*' s s) (*' x x)) two-to-m+1))
                                           (reduced true) false))
                                       false (range (inc H)))))))
 
-(subset-diophantine-constants [1 1] 1)
+(subset-sum? [4] 8)
+(subset-diophantine-constants [4] 8)
 
-(let [vals (subset-diophantine-constants [1 1] 3)]
+(tcgen/sample (tcgen/resize 10 tcgen/s-pos-int))
+
+(let [vals (subset-diophantine-constants [4] 8)]
   (def H (:H vals))
   (def K (:K vals))
   (def s (:s vals))
   (def two-to-m+1 (:two-to-m+1 vals)))
 
-(map (fn [next]
-       (if (and (multiple? (-' ('* H H) ('* next next)) K)
-                (multiple? (-' ('* s s) ('* next next)) two-to-m+1))
-         [next true]
-         [next false]))
+(map (fn [x]
+       (if (and (multiple? (-' (*' H H) (*' x x)) K)
+                (multiple? (-' (*' s s) (*' x x)) two-to-m+1))
+         [x true]
+         [x false]))
      (range (inc H)))
 
 (lemma-5-1-test)
+(multiple? (-' (*' H H) (*' 1 1)) K)
 
 (defn has-nat-root? [f] (->> (for [x (range 1000) y (range 1000)] [x y])
                              (filter (partial apply (eval f)))

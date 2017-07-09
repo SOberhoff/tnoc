@@ -61,7 +61,7 @@
   (let [n (count weights)
         sum (reduce + weights)
         s (- (* 2 target) sum)
-        m (int (ceil (/ (Math/log (+ 1 sum target)) (Math/log 2))))
+        m (int (ceil (/ (Math/log (+ 1 sum (* 2 target))) (Math/log 2))))
         qs (take n (filter prime? (iterate inc 3)))
         thetas (map (partial find-theta m qs weights) (range n))
         H (reduce +' thetas)
