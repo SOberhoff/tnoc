@@ -1,7 +1,7 @@
 (ns tnoc.primitive-recursion
   (:require [clojure.core.match :refer [match]]
             [clojure.walk :as walk]
-            [clojure.spec :as spec]
+            [clojure.spec.alpha :as spec]
             [com.rpl.specter :as spt]))
 
 (load "primitive_recursion_spec")
