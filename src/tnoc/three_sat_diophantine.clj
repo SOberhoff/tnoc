@@ -2,8 +2,8 @@
   (:require [tnoc.subset-diophantine :refer [prime? merge-meshes]]
             [clojure.core.match :refer [match]]
             [clojure.math.numeric-tower :refer [expt]]
-            [clojure.spec :as spec]
-            [clojure.spec.gen :as sgen]))
+            [clojure.spec.alpha :as spec]
+            [clojure.spec.gen.alpha :as sgen]))
 
 (defn preprocess [formula]
   (->> formula

@@ -1,8 +1,8 @@
 (ns tnoc.subset-diophantine
   (:require [clojure.math.numeric-tower :refer [expt ceil]]
-            [clojure.spec :as spec]
-            [clojure.spec.gen :as sgen]
-            [clojure.spec.test :as stest]))
+            [clojure.spec.alpha :as spec]
+            [clojure.spec.gen.alpha :as sgen]
+            [clojure.spec.test.alpha :as stest]))
 
 (defn prime? [n]
   (->> (range 2 n)
