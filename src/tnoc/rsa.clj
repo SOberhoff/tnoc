@@ -68,7 +68,7 @@
                   (= (dec p) (mod-exp a k p))))))))
 
 (defn prime? [p]
-  "Tests if n is prime using the Miller-Rabin test,
+  "Tests if p is prime using the Miller-Rabin test,
   yielding a false positive with probability <= 2^-100."
   (if (< 1 p)
     (every? identity (repeatedly 100 #(miller-rabin p)))))
