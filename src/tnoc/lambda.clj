@@ -1,7 +1,7 @@
 (ns tnoc.lambda
   (:require [clojure.zip :as zip]
             [clojure.spec.alpha :as spec]
-            [clojure.spec.gen.alpha :as gen]
+            [clojure.spec.gen.alpha :as sgen]
             [com.rpl.specter :as spt]
             [clojure.core.match :refer [match]]
             [clojure.walk :as walk]

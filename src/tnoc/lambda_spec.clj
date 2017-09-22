@@ -1,6 +1,6 @@
 (in-ns 'tnoc.lambda)
 
-(spec/def ::symbol (spec/with-gen symbol? #(gen/fmap (comp symbol str) (spec/gen char?))))
+(spec/def ::symbol (spec/with-gen symbol? #(sgen/fmap (comp symbol str) (spec/gen char?))))
 
 (spec/def ::params (spec/coll-of ::symbol, :kind vector?, :distinct true, :gen-max 3))
 
