@@ -5,8 +5,6 @@
   (:import (java.util Random)
            (clojure.lang BigInt)))
 
-(load "rsa_spec")
-
 (defn string-to-bigints [string bytesize]
   "Splits up the input into BigInts whose length is bounded by bytesize."
   (->> (.getBytes string)
@@ -42,37 +40,38 @@
   (nth (euclid a b) 2))
 
 (defn invert [a n]
-  "Assuming a < n and a and n are relatively prime
+  "Assuming 0 < a < n and a and n are relatively prime
   finds the multiplicative inverse of a in Z_n."
   (let [x (first (euclid a n))]
     (+' x (*' n (inc (quot x n))))))
 
 (defn rand-bigint [n]
   "Returns a random BigInt in the in the range 1 (inclusive) to n (exclusive)."
-  (if (< 1 n)
-    (let [rnd (Random.)]
-      (->> (repeatedly #(BigInteger. (.bitLength (bigint n)) rnd))
-           (filter #(< 0 % n))
-           (first)))))
+  (let [rnd (Random.)]
+    (->> (repeatedly #(BigInteger. (.bitLength (bigint n)) rnd))
+         (filter #(< 0 % n))
+         (first))))
 
 (defn miller-rabin [p]
-  "Applies the Miller-Rabin primality test once."
-  (let [a (rand-bigint p)]
-    (cond
-      (not= 1 (gcd a p)) false
-      (not= 1 (mod-exp a (dec p) p)) false
-      :else (loop [k (dec p)]
-              (if (= 1 (mod-exp a k p))
-                (if (even? k)
-                  (recur (/ k 2))
-                  true)
-                (= (dec p) (mod-exp a k p)))))))
+  "Applies the Miller-Rabin primality test once,
+  yielding a false positive with probability <= 1/2."
+  (if (< 1 p)
+    (let [a (rand-bigint p)]
+      (cond
+        (not= 1 (gcd a p)) false
+        (not= 1 (mod-exp a (dec p) p)) false
+        :else (loop [k (dec p)]
+                (if (= 1 (mod-exp a k p))
+                  (if (even? k)
+                    (recur (/ k 2))
+                    true)
+                  (= (dec p) (mod-exp a k p))))))))
 
-(defn prime? [n]
+(defn prime? [p]
   "Tests if n is prime using the Miller-Rabin test,
-  yielding a false positive with probability 2^-100."
-  (if (< 1 n)
-    (every? identity (repeatedly 100 #(miller-rabin n)))))
+  yielding a false positive with probability <= 2^-100."
+  (if (< 1 p)
+    (every? identity (repeatedly 100 #(miller-rabin p)))))
 
 (defn probable-prime
   "Generates a prime number in the range [0, 2^bitsize - 1]
@@ -103,8 +102,8 @@
 (defn encrypt [string N e]
   "Encrypts a string by converting it into a sequence of BigInts,
   each of which is raised to the power of e in arithmetic done mod N."
-  (->> string
-       (string-to-bigints (quot (.bitLength N) 16))
+  (->> (quot (.bitLength (bigint N)) 16)
+       (string-to-bigints string)
        (map #(mod-exp % e N))))
 
 (defn encrypt-with-new-keys [string bitsize e]
@@ -126,3 +125,5 @@
           (bigints-to-string))))
   ([{encryption :encryption p :p q :q e :e}]
    (decrypt encryption p q e)))
+
+(load "rsa_spec")
