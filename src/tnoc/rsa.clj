@@ -6,7 +6,7 @@
            (clojure.lang BigInt)))
 
 (defn string-to-bigints [string bytesize]
-  "Splits up the input into BigInts whose length is bounded by bytesize."
+  "Splits up the input into BigInts whose number of bytes are bounded by bytesize."
   (->> (.getBytes string)
        (partition bytesize bytesize [])
        (map #(BigInt/fromBigInteger (BigInteger. (byte-array %))))))
@@ -22,10 +22,10 @@
   "Computes (x ^ y) % n using the repeated squaring method."
   (if (zero? y)
     1
-    (let [result (-> (mod (*' x x) n) (mod-exp (quot y 2) n))]
-      (if (even? y)
-        result
-        (mod (*' result x) n)))))
+    (mod (if (even? y)
+           (#(*' % %) (mod-exp x (/ y 2) n))
+           (*' (mod-exp x (dec y) n) x))
+         n)))
 
 (defn euclid [a b]
   "Returns a vector [x y gcd] such that x*a + y*b = gcd."
@@ -79,13 +79,11 @@
   Optionally an integer e > 1 may be provided, in which case the
   returned prime p won't have the property that p-1 is divisible by e."
   ([bitsize]
-   (let [rnd (Random.)]
-     (loop [possible-prime (BigInteger. bitsize rnd)
-            attempts 1]
-       (if (prime? possible-prime)
-         (do #_(println "after " attempts " attempts")
-           possible-prime)
-         (recur (inc possible-prime) (inc attempts))))))
+   (->> (Random.)
+        (BigInteger. bitsize)
+        (iterate inc)
+        (filter prime?)
+        (first)))
   ([bitsize e]
    (loop [p (probable-prime bitsize)]
      (if (zero? (mod (dec p) e))
@@ -102,13 +100,14 @@
 (defn encrypt [string N e]
   "Encrypts a string by converting it into a sequence of BigInts,
   each of which is raised to the power of e in arithmetic done mod N."
-  (->> (quot (.bitLength (bigint N)) 16)
+  (->> (/ (.bitLength (bigint N)) 8)
+       (#(if (integer? %) (dec %) (int %)))
        (string-to-bigints string)
        (map #(mod-exp % e N))))
 
 (defn encrypt-with-new-keys [string bitsize e]
   "Encrypts a string using two new prime numbers whose length is given by bitsize
-  and a public exponent of e. Returns a map containing both the public and private keys,
+  and a public exponent e. Returns a map containing both the public and private keys,
   as well as the encrypted string."
   (let [{N :N :as keys} (make-keys bitsize e)]
     (assoc keys :encryption (encrypt string N e))))
@@ -125,5 +124,3 @@
           (bigints-to-string))))
   ([{encryption :encryption p :p q :q e :e}]
    (decrypt encryption p q e)))
-
-(load "rsa_spec")
