@@ -57,15 +57,14 @@
   yielding a false positive with probability <= 1/2."
   (if (< 1 p)
     (let [a (rand-bigint p)]
-      (cond
-        (not= 1 (gcd a p)) false
-        (not= 1 (mod-exp a (dec p) p)) false
-        :else (loop [k (dec p)]
-                (if (= 1 (mod-exp a k p))
-                  (if (even? k)
-                    (recur (/ k 2))
-                    true)
-                  (= (dec p) (mod-exp a k p))))))))
+      (if (and (= 1 (gcd a p))
+               (= 1 (mod-exp a (dec p) p)))
+        (loop [k (dec p)]
+          (if (= 1 (mod-exp a k p))
+            (if (even? k)
+              (recur (/ k 2))
+              true)
+            (= (dec p) (mod-exp a k p))))))))
 
 (defn prime? [p]
   "Tests if p is prime using the Miller-Rabin test,
@@ -85,10 +84,9 @@
         (filter prime?)
         (first)))
   ([bitsize e]
-   (loop [p (probable-prime bitsize)]
-     (if (zero? (mod (dec p) e))
-       (recur (probable-prime bitsize))
-       p))))
+   (->> (repeatedly (partial probable-prime bitsize))
+        (filter #(not (zero? (mod (dec %) e))))
+        (first))))
 
 (defn make-keys [bitsize e]
   "Generates a map containing the private keys :p and :q (both prime),

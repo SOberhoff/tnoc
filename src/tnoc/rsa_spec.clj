@@ -56,7 +56,7 @@
 
 (spec/fdef prime?
            :args (spec/cat :n ::nat)
-           :ret boolean?)
+           :ret (spec/nilable boolean?))
 
 (spec/fdef probable-prime
            :args (spec/or :arity-1 (spec/cat :bitsize pos-int?)
