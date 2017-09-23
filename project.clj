@@ -1,4 +1,4 @@
-(defproject tnoc "0.1.0"
+(defproject tnoc "0.1.2"
   :description "Clojure code inspired by The Nature of Computation by Cristopher Moore & Stephan Mertens"
   :url "https://github.com/SOberhoff/tnoc"
   :license {:name "Eclipse Public License"

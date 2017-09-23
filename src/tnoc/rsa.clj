@@ -112,7 +112,7 @@
 
 (defn decrypt
   "Decrypts a sequence of BigInts by finding the multiplicative inverse of e
-  in the group Z_{(p-1)*(q-1)} and raising the BigInts to that power.
+  in the group Z_N and raising the BigInts to that power.
   The decrypted BigInts are then concatenated bytewise and cast to a string."
   ([encryption p q e]
    (let [d (invert e (*' (dec p) (dec q)))
