@@ -35,8 +35,8 @@
 
 (defn transition-pairs [turing-machine]
   (apply concat
-         (for [[current-state transition-fns] turing-machine
-               [current-symbol [next-symbol direction next-state]] transition-fns
+         (for [[current-state transition-fn] turing-machine
+               [current-symbol [next-symbol direction next-state]] transition-fn
                :let [current-state-name (str \( (name current-state) \))
                      next-state-name (str \( (name next-state) \))]]
            (case direction
