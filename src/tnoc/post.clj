@@ -1,4 +1,5 @@
-(ns tnoc.post)
+(ns tnoc.post
+  (:require [tnoc.turing :refer [get-alphabet U U-even-config]]))
 
 (defn new-strings [string pair-map]
   (for [prefix (keys pair-map)
@@ -10,18 +11,14 @@
        (iterate (partial mapcat #(new-strings % pair-map)))
        (take-while not-empty)))
 
-(def alphabet [\0 \1 \_ \| \$])
-
-(def default-pairs (map #(vector (str %) (str %)) alphabet))
-
-(defn move-right-pairs [current-state-name next-state-name current-symbol next-symbol]
+(defn move-right-pairs [current-state-name next-state-name current-symbol next-symbol alphabet]
   (for [symbol-2-name alphabet]
     [(str current-state-name current-symbol symbol-2-name)
      (if-not (= \| symbol-2-name)
        (str next-symbol next-state-name symbol-2-name)
        (str next-symbol next-state-name "_|"))]))
 
-(defn move-left-pairs [current-state-name]
+(defn move-left-pairs [current-state-name alphabet]
   (concat
     (for [symbol-1-name alphabet
           symbol-2-name alphabet]
@@ -34,25 +31,25 @@
          (str \| current-state-name \_))])))
 
 (defn transition-pairs [turing-machine]
-  (apply concat
-         (for [[current-state transition-fn] turing-machine
-               [current-symbol [next-symbol direction next-state]] transition-fn
-               :let [current-state-name (str \( (name current-state) \))
-                     next-state-name (str \( (name next-state) \))]]
-           (case direction
-             :>> (move-right-pairs current-state-name next-state-name current-symbol next-symbol)
-             :<< (conj (move-left-pairs next-state-name)
-                       [(str current-state-name current-symbol)
-                        (str \$ next-symbol \' next-state-name)])
-             :<> [[(str current-state-name current-symbol)
-                   (str next-state-name next-symbol)]]))))
+  (let [alphabet (into [\| \$] (get-alphabet turing-machine))]
+    (apply concat
+           (for [[current-state transition-fn] turing-machine
+                 [current-symbol [next-symbol direction next-state]] transition-fn
+                 :let [current-state-name (str \( (name current-state) \))
+                       next-state-name (str \( (name next-state) \))]]
+             (case direction
+               :>> (move-right-pairs current-state-name next-state-name current-symbol next-symbol alphabet)
+               :<< (conj (move-left-pairs next-state-name alphabet)
+                         [(str current-state-name current-symbol)
+                          (str \$ next-symbol \' next-state-name)])
+               :<> [[(str current-state-name current-symbol)
+                     (str next-state-name next-symbol)]])))))
 
 (defn compile-turing-machine [initial-configuration turing-machine]
-  [(-> (into {} default-pairs)
+  [(-> (reduce #(assoc %1 %2 %2) {"|" "|" "$" "$"} (map str (get-alphabet turing-machine)))
        (into (transition-pairs turing-machine)))
    (str \( (name (initial-configuration :STATE)) \)
         (subs (initial-configuration :TAPE) (initial-configuration :POSITION))
         \| (subs (initial-configuration :TAPE) 0 (initial-configuration :POSITION)))])
 
-(defn filter-turing-steps [strings]
-  (filter #(.startsWith % "(") strings))
+(defn filter-turing-steps [strings] (filter #(.startsWith % "(") strings))
