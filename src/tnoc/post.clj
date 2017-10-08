@@ -1,11 +1,12 @@
-(ns tnoc.post)
+(ns tnoc.post
+  (:require [tnoc.turing :refer [get-alphabet]]))
 
 (defn new-strings [string pair-map max-prefix-length]
   (->> (range 1 (inc max-prefix-length))
        (mapcat (fn [length] (->> (pair-map (subs string 0 length))
                                  (map #(str (subs string length) %)))))))
 
-(defn run [pair-map initial-string]
+(defn run-post-canonical-system [pair-map initial-string]
   (let [max-prefix-length (apply max (map count (keys pair-map)))]
     (->> (list initial-string)
          (iterate (partial mapcat #(new-strings % pair-map max-prefix-length)))
@@ -44,7 +45,7 @@
              :<> [[(str current-state-name current-symbol)
                    #{(str next-state-name next-symbol)}]]))))
 
-(defn compile-turing-machine [turing-machine initial-configuration]
+(defn compile-to-post-canonical-system [turing-machine initial-configuration]
   (let [alphabet (into [\| \$] (get-alphabet turing-machine))]
     [(-> (reduce #(assoc %1 (str %2) #{(str %2)}) {} alphabet)
          (into (transition-pairs turing-machine alphabet)))

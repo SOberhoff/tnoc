@@ -6,16 +6,16 @@
 
 (deftest post-even-turing-accept-test
   (is (string/starts-with?
-        (->> (compile-turing-machine even-turing-accepting-initial-configuration even-turing)
-             (apply run)
+        (->> (compile-to-post-canonical-system even-turing even-turing-accepting-initial-configuration)
+             (apply run-post-canonical-system)
              (last)
              (first))
         "(EVEN)")))
 
 (deftest post-even-turing-reject-test
   (is (string/starts-with?
-        (->> (compile-turing-machine even-turing-accepting-rejecting-configuration even-turing)
-             (apply run)
+        (->> (compile-to-post-canonical-system even-turing even-turing-accepting-rejecting-configuration)
+             (apply run-post-canonical-system)
              (last)
              (first))
         "(ODD)")))

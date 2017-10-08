@@ -1,7 +1,13 @@
 (ns tnoc.turing
-  (:require [clojure.spec.alpha :as spec]))
+  (:require [clojure.spec.alpha :as spec]
+            [com.rpl.specter :as spt]
+            [clojure.string :as str]))
+
+(load "turing_spec")
 
 (defn next-configuration [turing-machine {state :STATE tape :TAPE position :POSITION}]
+  "Returns the next configuration of a Turing machine given a description of the Turing machine
+  and its current configuration. Returns nil if no transition is possible."
   (if-let [[next-symbol direction next-state] ((turing-machine state) (.charAt tape position))]
     (let [modified-tape (str (subs tape 0 position) next-symbol (subs tape (inc position)))
           next-position (case direction
@@ -15,120 +21,162 @@
                    :else modified-tape)
        :POSITION next-position})))
 
-(defn run [turing-machine configuration]
+(defn run-turing-machine [turing-machine configuration]
+  "Returns the sequence of configurations gone through by a Turing machine during execution."
   (take-while some? (iterate (partial next-configuration turing-machine) configuration)))
 
 (defn get-alphabet [turing-machine]
+  "Returns the set of all characters that are either read or written by the given Turing machine."
   (-> #{}
       (into (mapcat keys (vals turing-machine)))
       (into (mapcat #(map first (vals %)) (vals turing-machine)))))
 
 (defn pprint-configuration [{state :STATE tape :TAPE position :POSITION}]
+  "Converts a configuration into a more readable string."
   (str (name state) ": " (subs tape 0 position) "." (.charAt tape position) "." (subs tape (inc position))))
 
-(def U
-  {:WR {\0 [\A :>> :D0]
-        \1 [\B :>> :D1]
-        \A [\A :>> :WR]
-        \B [\B :>> :WR]
-        \C [\C :>> :WR]
-        \D [\D :>> :WR]
-        \M [\M :>> :WR]
-        \X [\X :>> :WR]}
-   :D0 {\0 [\A :<< :R0]
-        \1 [\B :<< :R1]}
-   :D1 {\0 [\A :<< :R2]
-        \1 [\B :<< :R3]}
-   :R0 {\0 [\A :<< :RD]
-        \1 [\A :<< :RD]
-        \A [\A :<< :R0]
-        \B [\B :<< :R0]
-        \C [\C :<< :R0]
-        \D [\D :<< :R0]
-        \M [\M :<< :R0]
-        \X [\X :<< :R0]}
-   :R1 {\0 [\0 :>> :RD]
-        \1 [\0 :>> :RD]
-        \A [\A :<< :R1]
-        \B [\B :<< :R1]
-        \C [\C :<< :R1]
-        \D [\D :<< :R1]
-        \M [\M :<< :R1]
-        \X [\X :<< :R1]}
-   :R2 {\0 [\B :<< :RD]
-        \1 [\B :<< :RD]
-        \A [\A :<< :R2]
-        \B [\B :<< :R2]
-        \C [\C :<< :R2]
-        \D [\D :<< :R2]
-        \M [\M :<< :R2]
-        \X [\X :<< :R2]}
-   :R3 {\0 [\1 :>> :RD]
-        \1 [\1 :>> :RD]
-        \A [\A :<< :R3]
-        \B [\B :<< :R3]
-        \C [\C :<< :R3]
-        \D [\D :<< :R3]
-        \M [\M :<< :R3]
-        \X [\X :<< :R3]}
-   :RD {\0 [\0 :>> :FW]
-        \1 [\1 :>> :I1]
-        \A [\0 :>> :FW]
-        \B [\1 :>> :I1]}
-   :I1 {\0 [\A :>> :I1]
-        \1 [\B :>> :I1]
-        \A [\A :>> :I1]
-        \B [\B :>> :I1]
-        \C [\D :>> :FW]
-        \D [\D :>> :I1]
-        \M [\M :>> :I1]}
-   :FW {\0 [\A :<< :<0]
-        \1 [\B :>> :>0]
-        \A [\A :>> :FW]
-        \B [\B :>> :FW]
-        \C [\C :<< :<2]
-        \D [\D :>> :FW]
-        \M [\M :>> :FW]
-        \X [\X :<< :<2]}
-   :<0 {\1 [\1 :<< :<0]
-        \A [\A :<< :<0]
-        \B [\B :<< :<0]
-        \D [\D :<< :<0]
-        \M [\1 :>> :<1]}
-   :<1 {\0 [\A :<< :<0]
-        \1 [\1 :>> :<1]
-        \A [\A :>> :<1]
-        \B [\B :>> :<1]
-        \C [\C :<< :<2]
-        \D [\D :>> :<1]
-        \X [\X :<< :<2]}
-   :<2 {\1 [\X :<< :<2]
-        \A [\0 :<< :<2]
-        \B [\1 :<< :<2]
-        \D [\C :<< :<2]
-        \M [\M :>> :WR]}
-   :>0 {\0 [\0 :>> :>0]
-        \1 [\1 :>> :>0]
-        \A [\A :>> :>0]
-        \C [\C :>> :>0]
-        \M [\A :>> :>0]
-        \X [\M :<< :>1]}
-   :>1 {\0 [\0 :<< :>1]
-        \1 [\1 :<< :>1]
-        \A [\A :<< :>1]
-        \B [\B :>> :>2]
-        \C [\C :<< :>1]}
-   :>2 {\1 [\B :>> :>0]
-        \A [\M :>> :>3]
-        \C [\D :>> :>3]
-        \M [\M :>> :WR]}
-   :>3 {\0 [\A :>> :>3]
-        \1 [\B :>> :>3]
-        \A [\M :>> :>3]
-        \C [\D :>> :>3]
-        \M [\M :>> :WR]}})
 
-(def U-even-config
-  {:STATE    :WR
-   :TAPE     "1110M00C1X101C11X00C1X10000C00X"
-   :POSITION 4})
+(defn- expand-multi-key [transition-fns]
+  "Expands sets used as keys in the definition of Turing machine transition functions into the
+  corresponding character-key transition functions."
+  (-> (fn [new-transition-fns [key val]]
+        (if (set? key)
+          (reduce #(assoc %1 %2 val) new-transition-fns key)
+          (assoc new-transition-fns key val)))
+      (reduce {} transition-fns)))
+
+(defn- infer-transitions [[current-state transition-fns]]
+  "Adds omitted next-symbols and next-states to transitions."
+  (->> transition-fns
+       (map (fn [[current-symbol transition]]
+              (let [{next-symbol :next-symbol direction :direction next-state :next-state}
+                    (spec/conform ::transition' transition)]
+                [current-symbol [(if next-symbol next-symbol current-symbol)
+                                 direction
+                                 (if next-state next-state current-state)]])))
+       (into {})
+       (conj [current-state])))
+
+(defmacro def-turing-machine [name specification]
+  "A Turing machine is defined as a map from states to transition functions. Transition functions
+  in turn are a map that associates current symbols with transitions. Finally transitions are a
+  3-tuple of the form [next-symbol direction next-state].
+  Using this macro also allows a few shorthand notations. If several current symbols lead to the
+  same transition, those current symbols can be grouped together into a set that maps to the shared
+  transition. Also if the current symbol or the current state aren't changed, they may be omitted
+  from transitions. (Omitting the next symbol is particularly useful when grouping together current
+  symbols.)"
+  `(def ~name
+     ~(->> specification
+           (spt/transform [spt/MAP-VALS] expand-multi-key)
+           (map infer-transitions)
+           (into {}))))
+
+; A universal Turing machine
+(def-turing-machine
+  U
+  {:WRITE?          {\0                   [\A :<< :DIRECTION?-0]
+                     \1                   [\B :<< :DIRECTION?-1]
+                     #{\A \B \C \D \M \X} [:<<]}
+   :DIRECTION?-0    {\0 [\A :>> :GOTO-TAPE-0]
+                     \1 [\B :>> :GOTO-TAPE-1]}
+   :DIRECTION?-1    {\0 [\A :>> :GOTO-TAPE-2]
+                     \1 [\B :>> :GOTO-TAPE-3]}
+   :GOTO-TAPE-0     {\0                   [\0 :<< :READ]
+                     \1                   [\0 :<< :READ]
+                     #{\A \B \C \D \M \X} [:>>]}
+   :GOTO-TAPE-1     {\0                   [\A :>> :READ]
+                     \1                   [\A :>> :READ]
+                     #{\A \B \C \D \M \X} [:>>]}
+   :GOTO-TAPE-2     {\0                   [\1 :<< :READ]
+                     \1                   [\1 :<< :READ]
+                     #{\A \B \C \D \M \X} [:>>]}
+   :GOTO-TAPE-3     {\0                   [\B :>> :READ]
+                     \1                   [\B :>> :READ]
+                     #{\A \B \C \D \M \X} [:>>]}
+   :READ            {\0 [\0 :<< :IF-ZERO]
+                     \1 [\1 :<< :GOTO-TRANSITION]
+                     \A [\0 :<< :IF-ZERO]
+                     \B [\1 :<< :GOTO-TRANSITION]}
+   :IF-ZERO         {\0             [\A :<<]
+                     \1             [\B :<<]
+                     \C             [\D :<< :GOTO-TRANSITION]
+                     #{\A \B \D \M} [:<<]}
+   :GOTO-TRANSITION {\0             [\A :<< :<<MARK]
+                     \1             [\B :>> :>>MARK]
+                     #{\C \X}       [:>> :>>CLEANUP]
+                     #{\A \B \D \M} [:<<]}
+   :>>MARK          {\M             [\0 :<< :>>REWIND]
+                     #{\0 \A \B \D} [:>>]}
+   :>>REWIND        {\1             [\B :>> :>>MARK]
+                     #{\C \X}       [:>> :>>CLEANUP]
+                     #{\0 \A \B \D} [:<<]}
+   :>>CLEANUP       {\0 [\X :>>]
+                     \A [\0 :>>]
+                     \B [\1 :>>]
+                     \D [\C :>>]
+                     \M [:<< :WRITE?]}
+   :<<MARK          {#{\0 \1 \B \C} [:<<]
+                     \M             [\B :<<]
+                     \X             [\M :>> :<<REWIND]}
+   :<<REWIND        {#{\0 \1 \B \C} [:>>]
+                     \A             [:<< :<<MARK-AGAIN?]}
+   :<<MARK-AGAIN?   {\0 [\A :<< :<<MARK]
+                     \B [\M :<< :<<CLEANUP]
+                     \C [\D :<< :<<CLEANUP]
+                     \M [:<< :WRITE?]}
+   :<<CLEANUP       {\0 [\A :<<]
+                     \1 [\B :<<]
+                     \B [\M :<<]
+                     \C [\D :<<]
+                     \M [:<< :WRITE?]}})
+
+(defn- get-transition-index [turing-machine state symbol]
+  (->> (for [[current-state transition-fns] turing-machine
+             [current-symbol _] transition-fns]
+         [current-state current-symbol])
+       (reduce #(if (= [state symbol] %2) (reduced %1) (inc %1)) 0)))
+
+(defn- get-offset-indicator [current-index next-index]
+  (apply str
+         (if (< current-index next-index)
+           (repeat (- next-index current-index) \1)
+           (repeat (- current-index next-index) \0))))
+
+(defn- get-transition-strings [turing-machine]
+  (for [[current-state transition-fns] turing-machine
+        [current-symbol [next-symbol direction next-state]] transition-fns
+        :let [current-index (get-transition-index turing-machine current-state current-symbol)
+              transition-index-if-0 (get-transition-index turing-machine next-state \0)
+              transition-index-if-1 (get-transition-index turing-machine next-state \1)]]
+    (str
+      (get-offset-indicator current-index transition-index-if-0)
+      \C
+      (get-offset-indicator current-index transition-index-if-1)
+      (if (= :<< direction) \0 \1)
+      next-symbol
+      \X)))
+
+(defn- mark-string [string]
+  (apply str (map #(case % \0 \A, \1 \B, \C \D, \X \M) string)))
+
+(defn- mark-transition-strings [transition-strings turing-machine state first-symbol]
+  (let [first-transition-index (get-transition-index turing-machine state first-symbol)]
+    (map-indexed #(cond (< first-transition-index %1) (mark-string %2)
+                        (= first-transition-index %1) (str (subs %2 0 (dec (count %2))) \M)
+                        :else %2)
+                 transition-strings)))
+
+(defn serialize-turing-machine [turing-machine {state :STATE tape :TAPE position :POSITION}]
+  (str "X"
+       (-> (get-transition-strings turing-machine)
+           (mark-transition-strings turing-machine state (.charAt tape position))
+           (str/join))
+       (str (mark-string (subs tape 0 position)) (subs tape position))))
+
+(defn convert-to-U-input [turing-machine configuration]
+  (let [tape (serialize-turing-machine turing-machine configuration)]
+    {:STATE    :WRITE?
+     :TAPE     tape
+     :POSITION (.indexOf tape "M")}))
+
