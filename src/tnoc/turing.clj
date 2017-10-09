@@ -132,18 +132,30 @@
                      \M [:<< :WRITE?]}})
 
 (defn- get-transition-index [turing-machine state symbol]
+  "Finds the index of transition belonging to the given symbol and state in the given Turing machine."
   (->> (for [[current-state transition-fns] turing-machine
              [current-symbol _] transition-fns]
          [current-state current-symbol])
        (reduce #(if (= [state symbol] %2) (reduced %1) (inc %1)) 0)))
 
+(defn- get-transition [turing-machine index]
+  "Finds the transition at the given index in the given Turing machine."
+  (nth (for [[_ transition-fns] turing-machine
+             [_ transition] transition-fns]
+         transition)
+       index))
+
 (defn- get-offset-indicator [current-index next-index]
+  "Creates the string with the requisite number of 0's or 1's to move from the transition with
+  `current-index` to the transition with `next-index`."
   (apply str
          (if (< current-index next-index)
            (repeat (- next-index current-index) \1)
            (repeat (- current-index next-index) \0))))
 
 (defn- get-transition-strings [turing-machine]
+  "Creates a sequence of strings representing all the transitions of the given Turing machine,
+  excluding the leading X guard."
   (for [[current-state transition-fns] turing-machine
         [current-symbol [next-symbol direction next-state]] transition-fns
         :let [current-index (get-transition-index turing-machine current-state current-symbol)
@@ -158,9 +170,16 @@
       \X)))
 
 (defn- mark-string [string]
-  (apply str (map #(case % \0 \A, \1 \B, \C \D, \X \M) string)))
+  "Converts unmarked symbols to their marked counterparts."
+  (apply str (map #(case % \0 \A, \1 \B, \C \D, \X \M, %) string)))
+
+(defn- unmark-string [string]
+  "Converts marked symbols to their unmarked counterparts."
+  (apply str (map #(case % \A \0, \B \1, \D \C, \X \M, %) string)))
 
 (defn- mark-transition-strings [transition-strings turing-machine state first-symbol]
+  "Marks the strings describing the transitions of the given Turing machine so as to reflect the
+  first transition taking place."
   (let [first-transition-index (get-transition-index turing-machine state first-symbol)]
     (map-indexed #(cond (< first-transition-index %1) (mark-string %2)
                         (= first-transition-index %1) (str (subs %2 0 (dec (count %2))) \M)
@@ -168,15 +187,29 @@
                  transition-strings)))
 
 (defn serialize-turing-machine [turing-machine {state :STATE tape :TAPE position :POSITION}]
+  "Takes a Turing machine together with a configuration and produces a string that can be placed
+  on the tape of the universal machine U."
   (str "X"
        (-> (get-transition-strings turing-machine)
            (mark-transition-strings turing-machine state (.charAt tape position))
            (str/join))
        (str (mark-string (subs tape 0 position)) (subs tape position))))
 
-(defn convert-to-U-input [turing-machine configuration]
+(defn convert-to-U-configuration [turing-machine configuration]
+  "Converts a Turing machine together with a configuration into a configuration for the universal
+  Turing machine U."
   (let [tape (serialize-turing-machine turing-machine configuration)]
     {:STATE    :WRITE?
      :TAPE     tape
      :POSITION (.indexOf tape "M")}))
 
+(defn deconvert-from-U-configuration [turing-machine {U-tape :TAPE}]
+  "Reproduces the configuration of the given Turing machine from the given configuration of the
+  universal Turing machine U."
+  (let [current-transition-index (->> (re-seq #"[01ABCD]+[MX]" U-tape)
+                                      (reduce #(if (.endsWith %2 "M") (reduced %1) (inc %1)) 0))
+        [_ _ next-state] (get-transition turing-machine current-transition-index)
+        tape (subs U-tape (inc (.lastIndexOf U-tape "M")))]
+    {:STATE    next-state
+     :TAPE     (unmark-string tape)
+     :POSITION (inc (max (.lastIndexOf tape "A") (.lastIndexOf tape "B")))}))
