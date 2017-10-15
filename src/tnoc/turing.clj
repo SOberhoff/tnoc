@@ -25,6 +25,8 @@
   "Returns the sequence of configurations gone through by a Turing machine during execution."
   (take-while some? (iterate (partial next-configuration turing-machine) configuration)))
 
+
+
 (defn get-alphabet [turing-machine]
   "Returns the set of all characters that are either read or written by the given Turing machine."
   (-> #{}
@@ -34,6 +36,7 @@
 (defn pprint-configuration [{state :STATE tape :TAPE position :POSITION}]
   "Converts a configuration into a more readable string."
   (str (name state) ": " (subs tape 0 position) "." (.charAt tape position) "." (subs tape (inc position))))
+
 
 
 (defn- expand-multi-key [transition-fns]
@@ -70,7 +73,9 @@
      ~(->> specification
            (spt/transform [spt/MAP-VALS] expand-multi-key)
            (map infer-transitions)
-           (into {}))))
+           (into (sorted-map)))))
+
+
 
 ; A universal Turing machine
 (def-turing-machine
@@ -131,6 +136,8 @@
                      \C [\D :<<]
                      \M [:<< :WRITE?]}})
 
+
+
 (defn- get-transition-index [turing-machine state symbol]
   "Finds the index of transition belonging to the given symbol and state in the given Turing machine."
   (->> (for [[current-state transition-fns] turing-machine
@@ -138,11 +145,11 @@
          [current-state current-symbol])
        (reduce #(if (= [state symbol] %2) (reduced %1) (inc %1)) 0)))
 
-(defn- get-transition [turing-machine index]
-  "Finds the transition at the given index in the given Turing machine."
-  (nth (for [[_ transition-fns] turing-machine
+(defn- get-state-and-transition [turing-machine index]
+  "Finds the state and transition at the given index in the given Turing machine."
+  (nth (for [[state transition-fns] turing-machine
              [_ transition] transition-fns]
-         transition)
+         [state transition])
        index))
 
 (defn- get-offset-indicator [current-index next-index]
@@ -195,21 +202,21 @@
            (str/join))
        (str (mark-string (subs tape 0 position)) (subs tape position))))
 
-(defn convert-to-U-configuration [turing-machine configuration]
-  "Converts a Turing machine together with a configuration into a configuration for the universal
+(defn compile-to-U-configuration [turing-machine configuration]
+  "Compiles a Turing machine together with a configuration into a configuration for the universal
   Turing machine U."
   (let [tape (serialize-turing-machine turing-machine configuration)]
     {:STATE    :WRITE?
      :TAPE     tape
      :POSITION (.indexOf tape "M")}))
 
-(defn deconvert-from-U-configuration [turing-machine {U-tape :TAPE}]
+(defn decompile-from-U-configuration [turing-machine {U-tape :TAPE}]
   "Reproduces the configuration of the given Turing machine from the given configuration of the
   universal Turing machine U."
   (let [current-transition-index (->> (re-seq #"[01ABCD]+[MX]" U-tape)
                                       (reduce #(if (.endsWith %2 "M") (reduced %1) (inc %1)) 0))
-        [_ _ next-state] (get-transition turing-machine current-transition-index)
+        [state _] (get-state-and-transition turing-machine current-transition-index)
         tape (subs U-tape (inc (.lastIndexOf U-tape "M")))]
-    {:STATE    next-state
+    {:STATE    state
      :TAPE     (unmark-string tape)
      :POSITION (inc (max (.lastIndexOf tape "A") (.lastIndexOf tape "B")))}))
