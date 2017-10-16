@@ -36,8 +36,8 @@
               (:state)))))
 
 (def turing-machine-gen
-  (tcgen/let [alphabet (tcgen/set tcgen/char-alphanumeric {:min-elements 2})
-              states (tcgen/set tcgen/keyword {:min-elements 1})]
+  (tcgen/let [alphabet (tcgen/set tcgen/char-alphanumeric {:min-elements 2 :max-elements 10})
+              states (tcgen/set tcgen/keyword {:min-elements 1 :max-elements 10})]
              (let [symbol-gen (tcgen/elements alphabet)
                    state-gen (tcgen/elements states)
                    transition-gen (tcgen/tuple symbol-gen (tcgen/elements #{:<< :<> :>>}) state-gen)

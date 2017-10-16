@@ -1,7 +1,7 @@
 (ns tnoc.rsa
   (:require [clojure.spec.alpha :as spec]
             [clojure.spec.gen.alpha :as sgen]
-            [clojure.string :as string])
+            [clojure.string :as str])
   (:import (java.util Random)
            (clojure.lang BigInt)))
 

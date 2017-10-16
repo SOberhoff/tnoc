@@ -9,11 +9,11 @@
        (mapcat (fn [length] (->> (post-cs (subs string 0 length))
                                  (map #(str (subs string length) %)))))))
 
-(defn run-post-canonical-system [post-cs initial-string]
+(defn run-post-canonical-system [post-cs string]
   "Produces a sequence of sequences describing all possible producible strings using the given
   Post canonical system and the given initial string."
   (let [max-prefix-length (apply max (map count (keys post-cs)))]
-    (->> (list initial-string)
+    (->> (list string)
          (iterate (partial mapcat #(new-strings post-cs % max-prefix-length)))
          (take-while not-empty))))
 
@@ -61,5 +61,15 @@
      (str \( (name (configuration :state)) \)
           (subs (configuration :tape) (configuration :position))
           \| (subs (configuration :tape) 0 (configuration :position)))]))
+
+(defn decompile-string [string]
+  "Reconstructs the configuration of a Turing machine from a Post canonical system string."
+  (let [state-string (re-find #"\(.+\)" string)
+        state (keyword (subs state-string 1 (dec (count state-string))))
+        post-cs-tape (apply str (reverse (str/split string #"\(.+\)")))
+        [right-of-head left-of-head] (str/split post-cs-tape #"\|")
+        tape (str left-of-head right-of-head)
+        position (count left-of-head)]
+    {:state state :tape tape :position position}))
 
 (defn filter-turing-steps [strings] (filter #(str/starts-with? % "(") strings))
