@@ -5,7 +5,7 @@
 
 (load "turing_spec")
 
-(defn next-configuration [turing-machine {state :STATE tape :TAPE position :POSITION}]
+(defn next-configuration [turing-machine {state :state tape :tape position :position}]
   "Returns the next configuration of a Turing machine given a description of the Turing machine
   and its current configuration. Returns nil if no transition is possible."
   (if-let [[next-symbol direction next-state] ((turing-machine state) (.charAt tape position))]
@@ -14,12 +14,12 @@
                           :>> (inc position)
                           :<< (if (zero? position) 0 (dec position))
                           :<> position)]
-      {:STATE    next-state
-       :TAPE     (cond
+      {:state    next-state
+       :tape     (cond
                    (and (zero? position) (= :<< direction)) (str \_ modified-tape)
                    (= next-position (count tape)) (str modified-tape \_)
                    :else modified-tape)
-       :POSITION next-position})))
+       :position next-position})))
 
 (defn run-turing-machine [turing-machine configuration]
   "Returns the sequence of configurations gone through by a Turing machine during execution."
@@ -33,7 +33,7 @@
       (into (mapcat keys (vals turing-machine)))
       (into (mapcat #(map first (vals %)) (vals turing-machine)))))
 
-(defn pprint-configuration [{state :STATE tape :TAPE position :POSITION}]
+(defn pprint-configuration [{state :state tape :tape position :position}]
   "Converts a configuration into a more readable string."
   (str (name state) ": " (subs tape 0 position) "." (.charAt tape position) "." (subs tape (inc position))))
 
@@ -193,7 +193,7 @@
                         :else %2)
                  transition-strings)))
 
-(defn serialize-turing-machine [turing-machine {state :STATE tape :TAPE position :POSITION}]
+(defn serialize-turing-machine [turing-machine {state :state tape :tape position :position}]
   "Takes a Turing machine together with a configuration and produces a string that can be placed
   on the tape of the universal machine U."
   (str "X"
@@ -206,17 +206,17 @@
   "Compiles a Turing machine together with a configuration into a configuration for the universal
   Turing machine U."
   (let [tape (serialize-turing-machine turing-machine configuration)]
-    {:STATE    :WRITE?
-     :TAPE     tape
-     :POSITION (.indexOf tape "M")}))
+    {:state    :WRITE?
+     :tape     tape
+     :position (.indexOf tape "M")}))
 
-(defn decompile-from-U-configuration [turing-machine {U-tape :TAPE}]
+(defn decompile-from-U-configuration [turing-machine {U-tape :tape}]
   "Reproduces the configuration of the given Turing machine from the given configuration of the
   universal Turing machine U."
   (let [current-transition-index (->> (re-seq #"[01ABCD]+[MX]" U-tape)
                                       (reduce #(if (.endsWith %2 "M") (reduced %1) (inc %1)) 0))
         [state _] (get-state-and-transition turing-machine current-transition-index)
         tape (subs U-tape (inc (.lastIndexOf U-tape "M")))]
-    {:STATE    state
-     :TAPE     (unmark-string tape)
-     :POSITION (inc (max (.lastIndexOf tape "A") (.lastIndexOf tape "B")))}))
+    {:state    state
+     :tape     (unmark-string tape)
+     :position (inc (max (.lastIndexOf tape "A") (.lastIndexOf tape "B")))}))

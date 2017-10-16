@@ -58,8 +58,8 @@
   (let [alphabet (into [\| \$] (get-alphabet turing-machine))]
     [(-> (reduce #(assoc %1 (str %2) #{(str %2)}) {} alphabet)
          (into (transition-pairs turing-machine alphabet)))
-     (str \( (name (configuration :STATE)) \)
-          (subs (configuration :TAPE) (configuration :POSITION))
-          \| (subs (configuration :TAPE) 0 (configuration :POSITION)))]))
+     (str \( (name (configuration :state)) \)
+          (subs (configuration :tape) (configuration :position))
+          \| (subs (configuration :tape) 0 (configuration :position)))]))
 
 (defn filter-turing-steps [strings] (filter #(str/starts-with? % "(") strings))
