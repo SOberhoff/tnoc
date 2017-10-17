@@ -6,15 +6,17 @@
   "Produces a sequence of all the strings derivable when applying the given Post canonical system
   to the given string. Also requires the maximal possible prefix length for performance reasons."
   (->> (range 1 (inc max-prefix-length))
-       (mapcat (fn [length] (->> (post-cs (subs string 0 length))
-                                 (map #(str (subs string length) %)))))))
+       (mapcat (fn [length]
+                 (if (<= length (count string))
+                   (->> (post-cs (subs string 0 length))
+                        (map #(str (subs string length) %))))))))
 
 (defn run-post-canonical-system [post-cs string]
-  "Produces a sequence of sequences describing all possible producible strings using the given
+  "Produces a sequence of sets describing all possible producible strings using the given
   Post canonical system and the given initial string."
   (let [max-prefix-length (apply max (map count (keys post-cs)))]
-    (->> (list string)
-         (iterate (partial mapcat #(new-strings post-cs % max-prefix-length)))
+    (->> #{string}
+         (iterate (partial reduce #(into %1 (new-strings post-cs %2 max-prefix-length)) #{}))
          (take-while not-empty))))
 
 
