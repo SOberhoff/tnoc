@@ -5,6 +5,7 @@
             [clojure.test.check.generators :as tcgen]
             [clojure.test.check.properties :as tcprop]
             [tnoc.rsa :refer :all]
+            [tnoc.utils :refer :all]
             [clojure.math.numeric-tower :refer [expt]]))
 
 (defspec mod-exp-test

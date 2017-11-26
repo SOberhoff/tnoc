@@ -1,7 +1,8 @@
 (ns tnoc.subset-diophantine
   (:require [tnoc.utils :refer :all]
             [clojure.math.numeric-tower :refer [expt ceil]]
-            [clojure.spec.alpha :as spec]))
+            [clojure.spec.alpha :as spec]
+            [clojure.spec.gen.alpha :as sgen]))
 
 (load "subset_diophantine_spec")
 

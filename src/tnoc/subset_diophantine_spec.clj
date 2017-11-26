@@ -1,5 +1,7 @@
 (in-ns 'tnoc.subset-diophantine)
 
+(load "utils_spec")
+
 (spec/def ::nat+ :tnoc.utils/nat+)
 
 (spec/def ::nat+-vec (spec/coll-of ::nat+ :kind vector?))

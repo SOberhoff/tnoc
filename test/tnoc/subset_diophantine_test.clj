@@ -70,7 +70,8 @@
 
 (def lemma-5-1-gen
   (tcgen/let [weights (tcgen/such-that #(odd? (reduce + %))
-                                       (tcgen/vector (tcgen/resize 6 tcgen/s-pos-int) 1 2))
+                                       (tcgen/vector (tcgen/resize 6 tcgen/s-pos-int) 1 2)
+                                       100)
               target (tcgen/resize 4 tcgen/pos-int)]
              [weights target]))
 
