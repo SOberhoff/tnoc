@@ -6,7 +6,7 @@
 
 (load "subset_diophantine_spec")
 
-(defn linear-diophantine [a b y]
+(defn- linear-diophantine [a b y]
   "Finds integers x0 and x1 such that x0*a + x1*b = y.
   Returns nil if no solution exists."
   (let [[x0 x1 gcd] (euclid a b)
@@ -14,7 +14,7 @@
     (if (multiple? y gcd)
       [(*' x0 quotient) (*' x1 quotient)])))
 
-(defn intersect-1d-lattices [[a-base a-shift] [b-base b-shift]]
+(defn- intersect-1d-lattices [[a-base a-shift] [b-base b-shift]]
   "Finds a 1d-lattice consisting of the intersection of the two input lattices.
   Returns nil if no such lattice exists."
   (if-let [[x0 _] (linear-diophantine a-base (*' -1 b-base) (-' b-shift a-shift))]
@@ -24,7 +24,7 @@
           min-positive-intersection (-' intersection (*' lcm n))]
       [lcm min-positive-intersection])))
 
-(defn find-theta [m qs weights index]
+(defn- find-theta [m qs weights index]
   (let [two-to-m (expt 2 m)
         x (nth weights index)
         q (nth qs index)

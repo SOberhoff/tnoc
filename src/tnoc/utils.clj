@@ -1,12 +1,13 @@
 (ns tnoc.utils
-  (:require [clojure.spec.alpha :as spec])
+  (:require [clojure.spec.alpha :as spec]
+            [clojure.math.numeric-tower :refer [ceil]])
   (:import (java.util Random)))
 
 (defn log [b x]
   (/ (Math/log x) (Math/log b)))
 
 (defn next-int [x]
-  (let [c (Math/ceil x)]
+  (let [c (ceil x)]
     (if (zero? (- c x))
       (int (inc x))
       (int c))))
@@ -34,7 +35,7 @@
 
 (defn gcd [a b]
   "The greatest common divisor of a and b."
-  (nth (euclid a b) 2))
+  (last (euclid a b)))
 
 (defn lcm [a b]
   "The least common multiple of a and b."
