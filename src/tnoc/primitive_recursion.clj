@@ -105,9 +105,10 @@
                            (grt (exp (S (S 0)) (sub x (S y))) x)))
 
 (primrec ^{:doc "floor of base 2 logarithm"}
-         lg [x] (lg-rec x x))
+         lg
+         [x] (lg-rec x x))
 
-(primrec ^{:doc "trianlge numbers: n*(n-1)/2"}
+(primrec ^{:doc "trianlge numbers: n*(n+1)/2"}
          triangle
          [0] 0
          [(S x)] (add (triangle x) (S x)))
@@ -121,7 +122,8 @@
                            (grt (triangle (sub x (S y))) x)))
 
 (primrec ^{:doc "inverse of the next smaller or equal triangle number"}
-         inv-triangle [x] (inv-triangle-rec x x))
+         inv-triangle
+         [x] (inv-triangle-rec x x))
 
 (primrec pair
          [x y] (add (triangle (add x y)) y))
