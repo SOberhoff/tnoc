@@ -19,7 +19,7 @@
 (defn mod-exp [x y n]
   "Computes (x ^ y) % n using the repeated squaring method."
   (if (zero? y)
-    1
+    (if (= 1 n) 0 1)
     (mod (if (even? y)
            (#(*' % %) (mod-exp x (/ y 2) n))
            (*' (mod-exp x (dec y) n) x))
