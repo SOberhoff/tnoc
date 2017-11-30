@@ -97,12 +97,14 @@
     (reduce +' (map * thetas sigmas))))
 
 (def solvable-subset-sum-gen
-  (tcgen/such-that
-    #(apply subset-sum? %)
-    (tcgen/tuple weights-gen tcgen/s-pos-int)
-    10000))
+  (tcgen/let [weights weights-gen
+              include? (apply tcgen/tuple (repeat (count weights) tcgen/boolean))]
+             [weights (->> (map vector include? weights)
+                           (filter first)
+                           (map second)
+                           (reduce +))]))
 
-(defspec diophantine-subset-test 20
+(defspec solvable-subset-diophantine-test
          (tcprop/for-all [[weights target] solvable-subset-sum-gen]
                          (let [f (subset-diophantine weights target)
                                [a b c] (filter number? (flatten f))
