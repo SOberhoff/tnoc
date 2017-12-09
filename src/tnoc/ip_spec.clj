@@ -2,9 +2,15 @@
 
 (spec/def ::term (spec/tuple integer? (spec/map-of keyword? nat-int?)))
 
-(spec/def ::Sum (partial instance? Sum))
+(spec/def ::Sum
+  (spec/with-gen (partial instance? Sum)
+                 #(sgen/fmap (fn [polynomials] (->Sum polynomials))
+                             (sgen/vector (spec/gen ::polynomial)))))
 
-(spec/def ::Product (partial instance? Product))
+(spec/def ::Product
+  (spec/with-gen (partial instance? Product)
+                 #(sgen/fmap (fn [polynomials] (->Product polynomials))
+                             (sgen/vector (spec/gen ::polynomial)))))
 
 (spec/def ::polynomial (spec/or :term ::term
                                 :Sum ::Sum
@@ -18,17 +24,20 @@
 
 (spec/def ::disjunction (spec/cat :or #{'or} :clauses (spec/* ::formula)))
 
-(spec/def ::all (spec/cat :A #{'A} :variable keyword? :body ::formula))
+(spec/def ::forall (spec/cat :A #{'A} :variable keyword? :body ::formula))
 
 (spec/def ::exists (spec/cat :E #{'E} :variable keyword? :body ::formula))
+
+(spec/def ::reduced (spec/cat :R #{'R} :variable keyword? :body ::formula))
+
+(spec/def ::quantified (spec/or :forall ::forall :exists ::exists :reduced ::reduced))
 
 (spec/def ::formula (spec/or
                       :literal ::literal
                       :negation ::negation
                       :conjuction ::conjunction
                       :disjuction ::disjunction
-                      :all ::all
-                      :exists ::exists))
+                      :quantified ::quantified))
 
 (spec/fdef ->Sum
            :args (spec/cat :polynomials (spec/coll-of ::polynomial :min-count 1))
@@ -74,7 +83,7 @@
            :args (spec/cat :product ::Product :distributive? boolean?)
            :ret ::polynomial)
 
-(spec/fdef simplify-polynomial
+(spec/fdef simplify
            :args (spec/cat :polynomial ::polynomial :distributive? boolean?)
            :ret ::polynomial)
 

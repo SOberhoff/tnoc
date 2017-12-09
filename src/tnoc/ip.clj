@@ -1,9 +1,11 @@
 (ns tnoc.ip
-  (:require [clojure.spec.alpha :as spec]
+  (:require [tnoc.utils :refer :all]
+            [clojure.spec.alpha :as spec]
             [clojure.walk :as walk]
             [clojure.math.numeric-tower :refer [expt]]
             [clojure.string :as str]
-            [com.rpl.specter :as spt]))
+            [com.rpl.specter :as spt]
+            [clojure.set :as set]))
 
 (defrecord Sum [polynomials])
 
@@ -79,24 +81,27 @@
         (->> (concat [term] sums (mapcat :polynomials products))
              (make-product))))))
 
-(defn simplify-polynomial [polynomial distributive?]
-  (cond
-    (spec/valid? ::term polynomial)
-    (simplify-term polynomial)
+(defn simplify
+  ([polynomial] (simplify polynomial true))
+  ([polynomial distributive?]
+   (cond
+     (spec/valid? ::term polynomial)
+     (simplify-term polynomial)
 
-    (spec/valid? ::Sum polynomial)
-    (->> polynomial
-         (spt/transform [:polynomials spt/ALL] #(simplify-polynomial % distributive?))
-         (add))
+     (spec/valid? ::Sum polynomial)
+     (->> polynomial
+          (spt/transform [:polynomials spt/ALL] #(simplify % distributive?))
+          (spt/transform [:polynomials] (partial mapcat #(if (spec/valid? ::Sum %) (:polynomials %) [%])))
+          (add))
 
-    (spec/valid? ::Product polynomial)
-    (let [multiplicands-simplified (spt/transform [:polynomials spt/ALL]
-                                                  #(simplify-polynomial % distributive?)
-                                                  polynomial)
-          multiplied (multiply multiplicands-simplified distributive?)]
-      (if (spec/valid? ::Sum multiplied)
-        (add multiplied)
-        multiplied))))
+     (spec/valid? ::Product polynomial)
+     (let [multiplicands-simplified (spt/transform [:polynomials spt/ALL]
+                                                   #(simplify % distributive?)
+                                                   polynomial)
+           multiplied (multiply multiplicands-simplified distributive?)]
+       (if (spec/valid? ::Sum multiplied)
+         (add multiplied)
+         multiplied)))))
 
 (defn substitute [polynomial substitution]
   (walk/prewalk
@@ -110,6 +115,21 @@
 
 (defn arithmetic-negate [polynomial]
   (->Sum [[1 {}] (->Product [[-1 {}] polynomial])]))
+
+(defn arithmetic-forall [polynomial variable]
+  (->Product [(substitute polynomial {variable 0})
+              (substitute polynomial {variable 1})]))
+
+(defn arithmetic-exists [polynomial variable]
+  (arithmetic-negate (->Product [(arithmetic-negate (substitute polynomial {variable 0}))
+                                 (arithmetic-negate (substitute polynomial {variable 1}))])))
+
+(defn arithmetic-reduced [polynomial variable]
+  (let [subst-0 (substitute polynomial {variable 0})
+        subst-1 (substitute polynomial {variable 1})]
+    (->Sum [subst-0
+            (->Product [[1 {variable 1}]
+                        (->Sum [subst-1 (->Product [[-1 {}] subst-0])])])])))
 
 (defn arithmetize [formula]
   (cond
@@ -131,17 +151,14 @@
          (make-product)
          (arithmetic-negate))
 
-    (spec/valid? ::all formula)
-    (let [[_ variable body] formula]
-      (->Product [(arithmetize (walk/postwalk-replace {variable false} body))
-                  (arithmetize (walk/postwalk-replace {variable true} body))]))
+    (spec/valid? ::forall formula)
+    (let [[_ variable body] formula] (arithmetic-forall (arithmetize body) variable))
 
     (spec/valid? ::exists formula)
-    (let [[_ variable body] formula]
-      (arithmetic-negate
-        (->Product
-          [(arithmetic-negate (arithmetize (walk/postwalk-replace {variable false} body)))
-           (arithmetic-negate (arithmetize (walk/postwalk-replace {variable true} body)))])))))
+    (let [[_ variable body] formula] (arithmetic-exists (arithmetize body) variable))
+
+    (spec/valid? ::reduced formula)
+    (let [[_ variable body] formula] (arithmetic-reduced (arithmetize body) variable))))
 
 (defn serialize-term [[coefficient variables]]
   (if (empty? variables)
@@ -167,11 +184,83 @@
            sums     :Sum
            products :Product} (group-by-polynomials (:polynomials polynomial))
           term (reduce multiply-terms [1 {}] terms)
-          serialized-sums-products (->> (concat sums products)
-                                        (map #(str \( (serialize %) \)))
-                                        (apply str))]
+          serialized-sums (apply str (map #(str \( (serialize %) \)) sums))
+          serialized-products (apply str (map #(str (serialize %)) products))
+          serialized-sums-products (str serialized-sums serialized-products)]
       (case term
         [0 {}] "0"
-        [1 {}] serialized-sums-products
-        [-1 {}] (str \- serialized-sums-products)
+        [1 {}] (if (empty? serialized-sums-products) "1" serialized-sums-products)
+        [-1 {}] (if (empty? serialized-sums-products) "-1" (str \- serialized-sums-products))
         (str (serialize-term term) serialized-sums-products)))))
+
+(defn unquantified? [formula] (not (spec/valid? ::quantified formula)))
+
+(defn merlin [formula substitutions]
+  (if (unquantified? formula)
+    [(simplify (substitute (arithmetize formula) substitutions)) nil]
+    [(simplify (substitute (arithmetize formula) substitutions))
+     (let [[_ variable body] formula]
+       (-> (arithmetize body)
+           (substitute (dissoc substitutions variable))
+           (simplify)))]))
+
+(defn arthur [formula claim proof substitutions]
+  (if (unquantified? formula)
+    (= claim (simplify (substitute (arithmetize formula) substitutions)))
+    (= claim (simplify (let [[quantifier variable _] formula]
+                         (case quantifier
+                           A (arithmetic-forall proof variable)
+                           E (arithmetic-exists proof variable)
+                           R (simplify (substitute (arithmetic-reduced proof variable) substitutions))))))))
+
+(defn interact [formula test-ints]
+  (letfn [(impl [formula test-ints substitutions]
+            (if (unquantified? formula)
+              (let [[claim proof] (merlin formula substitutions)
+                    verified? (arthur formula claim proof substitutions)]
+                [[nil nil claim proof verified?]])
+              (let [[quantifier variable body] formula
+                    [test-int & rem-test-ints] test-ints
+                    [claim proof] (merlin formula substitutions)
+                    verified? (arthur formula claim proof substitutions)]
+                (lazy-cat [[quantifier variable claim proof verified?]]
+                          (cond
+                            (= 'R quantifier)
+                            (impl body test-ints substitutions)
+
+                            test-int
+                            (impl body rem-test-ints (assoc substitutions variable test-int))
+
+                            :else nil)))))]
+    (impl formula test-ints {})))
+
+(defn interact-serialized [formula test-ints]
+  (->> (interact formula test-ints)
+       (map (fn [[quantifier variable claim proof verified?]]
+              [quantifier variable (serialize claim) (serialize proof) verified?]))))
+
+(defn free-variables [formula]
+  (if (unquantified? formula)
+    (into #{} (filter keyword? (flatten formula)))
+    (let [[quantifier variable body] formula]
+      (if (= 'R quantifier)
+        (recur body)
+        (disj (free-variables body) variable)))))
+
+(defn remove-reductions [formula]
+  (if (unquantified? formula)
+    formula
+    (let [[quantifier variable body] formula]
+      (if (= 'R quantifier)
+        (recur body)
+        (list quantifier variable (remove-reductions body))))))
+
+(defn add-reductions [formula]
+  (letfn [(impl [formula]
+            (if (unquantified? formula)
+              (reduce #(list 'R %2 %1) formula (reverse (sort (free-variables formula))))
+              (let [[quantifier variable body] formula]
+                (reduce #(list 'R %2 %1)
+                        (list quantifier variable (impl body))
+                        (reverse (sort (free-variables formula)))))))]
+    (impl (remove-reductions formula))))
