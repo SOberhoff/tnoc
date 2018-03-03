@@ -5,7 +5,7 @@
             [clojure.math.numeric-tower :refer [expt]]
             [clojure.string :as str]
             [com.rpl.specter :as spt]
-            [clojure.set :as set]))
+            [clojure.core.async :refer [chan go >! <! close!]]))
 
 (defrecord Sum [polynomials])
 
@@ -73,7 +73,7 @@
                #(for [multiplicand-0 %1 multiplicand-1 %2]
                   (if (every? (partial spec/valid? ::term) [multiplicand-0 multiplicand-1])
                     (multiply-terms multiplicand-0 multiplicand-1)
-                    (->Product [multiplicand-0 multiplicand-1])))
+                    (make-product [multiplicand-0 multiplicand-1])))
                [term])
              (make-sum)
              (conj (mapcat :polynomials products))
@@ -114,22 +114,22 @@
     polynomial))
 
 (defn arithmetic-negate [polynomial]
-  (->Sum [[1 {}] (->Product [[-1 {}] polynomial])]))
+  (make-sum [[1 {}] (make-product [[-1 {}] polynomial])]))
 
 (defn arithmetic-forall [polynomial variable]
-  (->Product [(substitute polynomial {variable 0})
-              (substitute polynomial {variable 1})]))
+  (make-product [(substitute polynomial {variable 0})
+                 (substitute polynomial {variable 1})]))
 
 (defn arithmetic-exists [polynomial variable]
-  (arithmetic-negate (->Product [(arithmetic-negate (substitute polynomial {variable 0}))
-                                 (arithmetic-negate (substitute polynomial {variable 1}))])))
+  (arithmetic-negate (make-product [(arithmetic-negate (substitute polynomial {variable 0}))
+                                    (arithmetic-negate (substitute polynomial {variable 1}))])))
 
 (defn arithmetic-reduced [polynomial variable]
   (let [subst-0 (substitute polynomial {variable 0})
         subst-1 (substitute polynomial {variable 1})]
-    (->Sum [subst-0
-            (->Product [[1 {variable 1}]
-                        (->Sum [subst-1 (->Product [[-1 {}] subst-0])])])])))
+    (make-sum [subst-0
+               (make-product [[1 {variable 1}]
+                              (make-sum [subst-1 (make-product [[-1 {}] subst-0])])])])))
 
 (defn arithmetize [formula]
   (cond
@@ -159,6 +159,24 @@
 
     (spec/valid? ::reduced formula)
     (let [[_ variable body] formula] (arithmetic-reduced (arithmetize body) variable))))
+
+(defn unquantified? [formula] (not (spec/valid? ::quantified formula)))
+
+(defn arithmetize-simplifying [formula]
+  (cond
+    (unquantified? formula) (simplify (arithmetize formula))
+
+    (spec/valid? ::forall formula)
+    (let [[_ variable body] formula]
+      (simplify (arithmetic-forall (arithmetize-simplifying body) variable)))
+
+    (spec/valid? ::exists formula)
+    (let [[_ variable body] formula]
+      (simplify (arithmetic-exists (arithmetize-simplifying body) variable)))
+
+    (spec/valid? ::reduced formula)
+    (let [[_ variable body] formula]
+      (simplify (arithmetic-reduced (arithmetize-simplifying body) variable)))))
 
 (defn serialize-term [[coefficient variables]]
   (if (empty? variables)
@@ -193,16 +211,13 @@
         [-1 {}] (if (empty? serialized-sums-products) "-1" (str \- serialized-sums-products))
         (str (serialize-term term) serialized-sums-products)))))
 
-(defn unquantified? [formula] (not (spec/valid? ::quantified formula)))
-
 (defn merlin [formula substitutions]
-  (if (unquantified? formula)
-    [(simplify (substitute (arithmetize formula) substitutions)) nil]
-    [(simplify (substitute (arithmetize formula) substitutions))
+  [(simplify (substitute (arithmetize-simplifying formula) substitutions))
+   (if (spec/valid? ::quantified formula)
      (let [[_ variable body] formula]
-       (-> (arithmetize body)
+       (-> (arithmetize-simplifying body)
            (substitute (dissoc substitutions variable))
-           (simplify)))]))
+           (simplify))))])
 
 (defn arthur [formula claim proof substitutions]
   (if (unquantified? formula)
@@ -213,32 +228,6 @@
                            E (arithmetic-exists proof variable)
                            R (simplify (substitute (arithmetic-reduced proof variable) substitutions))))))))
 
-(defn interact [formula test-ints]
-  (letfn [(impl [formula test-ints substitutions]
-            (if (unquantified? formula)
-              (let [[claim proof] (merlin formula substitutions)
-                    verified? (arthur formula claim proof substitutions)]
-                [[nil nil claim proof verified?]])
-              (let [[quantifier variable body] formula
-                    [test-int & rem-test-ints] test-ints
-                    [claim proof] (merlin formula substitutions)
-                    verified? (arthur formula claim proof substitutions)]
-                (lazy-cat [[quantifier variable claim proof verified?]]
-                          (cond
-                            (= 'R quantifier)
-                            (impl body test-ints substitutions)
-
-                            test-int
-                            (impl body rem-test-ints (assoc substitutions variable test-int))
-
-                            :else nil)))))]
-    (impl formula test-ints {})))
-
-(defn interact-serialized [formula test-ints]
-  (->> (interact formula test-ints)
-       (map (fn [[quantifier variable claim proof verified?]]
-              [quantifier variable (serialize claim) (serialize proof) verified?]))))
-
 (defn free-variables [formula]
   (if (unquantified? formula)
     (into #{} (filter keyword? (flatten formula)))
@@ -246,6 +235,48 @@
       (if (= 'R quantifier)
         (recur body)
         (disj (free-variables body) variable)))))
+
+(defn interact-once [formula substitutions]
+  (if (= (free-variables formula) (into #{} (keys substitutions)))
+    (let [[claim proof] (merlin formula substitutions)
+          verified? (arthur formula claim proof substitutions)]
+      [formula claim proof verified?])))
+
+(defn interact [formula test-ints]
+  (loop [formula formula
+         substitutions {}
+         [test-int & rem-test-ints :as test-ints] test-ints
+         interactions []]
+    (let [unassigned (first (remove (set (keys substitutions)) (free-variables formula)))]
+      (if unassigned
+        (if test-int
+          (recur formula (assoc substitutions unassigned test-int) rem-test-ints interactions)
+          interactions)
+        (if (unquantified? formula)
+          (conj interactions (interact-once formula substitutions))
+          (recur (nth formula 2)
+                 substitutions
+                 test-ints
+                 (conj interactions (interact-once formula substitutions))))))))
+
+(defn interaction-pprint [[formula claim proof verified?]]
+  [(if (unquantified? formula) formula (take 2 formula))
+   (serialize claim)
+   (serialize proof)
+   verified?])
+
+(defn interact-manually [formula]
+  (loop [formula formula
+         substitutions {}]
+    (let [unassigned (first (remove (set (keys substitutions)) (free-variables formula)))]
+      (if unassigned
+        (let [line (do (println (str unassigned " needs an assignment.")) (read-line))]
+          (if (re-matches #"[0-9]+" line)
+            (recur formula (assoc substitutions unassigned (read-string line)))))
+        (if (unquantified? formula)
+          (println (interaction-pprint (interact-once formula substitutions)))
+          (do (println (interaction-pprint (interact-once formula substitutions)))
+              (recur (nth formula 2) substitutions)))))))
 
 (defn remove-reductions [formula]
   (if (unquantified? formula)
