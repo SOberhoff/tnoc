@@ -1,146 +1,122 @@
 (ns tnoc.ip
-  (:require [tnoc.utils :refer :all]
-            [clojure.spec.alpha :as spec]
+  (:require [clojure.spec.alpha :as spec]
+            [clojure.spec.gen.alpha :as sgen]
             [clojure.walk :as walk]
             [clojure.math.numeric-tower :refer [expt]]
-            [clojure.string :as str]
-            [com.rpl.specter :as spt]
-            [clojure.core.async :refer [chan go >! <! close!]]))
-
-(defrecord Sum [polynomials])
-
-(defrecord Product [polynomials])
+            [clojure.string :as str]))
 
 (load "ip_spec")
 
-(defn group-by-polynomials [polynomials]
-  (group-by #(first (spec/conform ::polynomial %)) polynomials))
+(defn- make-sum [polynomials]
+  (cond (empty? polynomials) 0
+        (= 1 (count polynomials)) (first polynomials)
+        :else (concat ['+] polynomials)))
 
-(defn get-degree [[coefficient variables]]
-  (if (zero? coefficient)
-    0
-    (reduce + (map second variables))))
+(defn- make-product [polynomials]
+  (cond (empty? polynomials) 1
+        (= 1 (count polynomials)) (first polynomials)
+        :else (concat ['*] polynomials)))
 
-(defn sort-polynomials [polynomials]
-  (let [{terms    :term
-         sums     :Sum
-         products :Product} (group-by-polynomials polynomials)]
-    (concat (reverse (sort-by get-degree terms)) sums products)))
+(defn- separate-coefficient [polynomials]
+  "Takes a sequence of polynomials and returns a tuple containing the constant coefficient as well
+  as a sequence of the remaining factors."
+  (let [{numbers     true
+         rem-factors false} (group-by number? polynomials)]
+    [(reduce * numbers) (into () rem-factors)]))
 
-(defn make-sum [polynomials]
-  (let [filtered-and-sorted (sort-polynomials (filter #(not= [0 {}] %) polynomials))]
-    (case (count filtered-and-sorted)
-      0 [0 {}]
-      1 (first filtered-and-sorted)
-      (->Sum filtered-and-sorted))))
+(defn- merge-factors [polynomials]
+  "Takes a sequence of polynomials - presumed to be factors of a product - and merges repeated
+  occurrences by adding the exponents."
+  (let [[coefficient factors] (separate-coefficient polynomials)
+        merged-factors (->> factors
+                            (map #(if (spec/valid? ::exponentiation %) {(nth % 1) (nth % 2)} {% 1}))
+                            (apply merge-with +)
+                            (map #(if (= 1 (second %)) (first %) (concat ['**] %))))]
+    (cond
+      (zero? coefficient) 0
+      (= 1 coefficient) (make-product merged-factors)
+      :else (if (empty? merged-factors)
+              coefficient
+              (concat ['* coefficient] merged-factors)))))
 
-(defn make-product [polynomials]
-  (let [filtered-and-sorted (sort-polynomials (filter #(not= [1 {}] %) polynomials))]
-    (case (count filtered-and-sorted)
-      0 [1 {}]
-      1 (first filtered-and-sorted)
-      (->Product filtered-and-sorted))))
+(defn- merge-terms [polynomials]
+  "Takes a sequence of polynomials - presumed to be terms of a sum - and merges repeated
+  occurrences by adding the constant coefficients."
+  (->> polynomials
+       (map #(apply hash-map (reverse (separate-coefficient (if (spec/valid? ::product %) (rest %) [%])))))
+       (apply merge-with +)
+       (filter (comp not zero? second))
+       (map (fn [[rem-factors coefficient]] (merge-factors (conj rem-factors coefficient))))
+       (make-sum)))
 
-(defn simplify-term [[coefficient variables]]
-  (if (zero? coefficient)
-    [0 {}]
-    [coefficient (spt/setval [spt/MAP-VALS zero?] spt/NONE variables)]))
+(defn- add [polynomial-1 polynomial-2]
+  (letfn [(get-terms [p] (if (spec/valid? ::sum p) (rest p) [p]))]
+    (merge-terms (concat (get-terms polynomial-1) (get-terms polynomial-2)))))
 
-(defn multiply-terms [[coefficient-0 variables-0] [coefficient-1 variables-1]]
-  (simplify-term [(* coefficient-0 coefficient-1) (merge-with + variables-0 variables-1)]))
+(defn- multiply [polynomial-1 polynomial-2 distributive?]
+  (cond
+    (and distributive? (spec/valid? ::sum polynomial-1))
+    (reduce add 0 (map #(multiply % polynomial-2 distributive?) (rest polynomial-1)))
 
-(defn add [{polynomials :polynomials}]
-  (let [{terms    :term
-         sums     :Sum
-         products :Product} (group-by-polynomials polynomials)
-        grouped-terms (->> (group-by second terms)
-                           (spt/transform [spt/MAP-VALS] #(reduce + (map first %)))
-                           (map #(vector (second %) (first %))))]
-    (->> (concat grouped-terms (mapcat :polynomials sums) products)
-         (spt/setval [spt/ALL #(spec/valid? ::term %) (comp zero? first)] spt/NONE)
-         (make-sum))))
+    (and distributive? (spec/valid? ::sum polynomial-2))
+    (reduce add 0 (map #(multiply polynomial-1 % distributive?) (rest polynomial-2)))
 
-(defn multiply [{polynomials :polynomials} distributive?]
-  (let [{terms    :term
-         sums     :Sum
-         products :Product} (group-by-polynomials polynomials)
-        term (reduce multiply-terms [1 {}] terms)]
-    (if (= [0 {}] term)
-      term
-      (if distributive?
-        (->> (map :polynomials sums)
-             (reduce
-               #(for [multiplicand-0 %1 multiplicand-1 %2]
-                  (if (every? (partial spec/valid? ::term) [multiplicand-0 multiplicand-1])
-                    (multiply-terms multiplicand-0 multiplicand-1)
-                    (make-product [multiplicand-0 multiplicand-1])))
-               [term])
-             (make-sum)
-             (conj (mapcat :polynomials products))
-             (make-product))
-        (->> (concat [term] sums (mapcat :polynomials products))
-             (make-product))))))
+    :else (letfn [(get-factors [p] (if (spec/valid? ::product p) (rest p) [p]))]
+            (merge-factors (concat (get-factors polynomial-1) (get-factors polynomial-2))))))
 
 (defn simplify
+  "Simplifies a polynomial by merging factors and terms. Also multiplies out sums appearing in
+  products if true is passed in as the second argument."
   ([polynomial] (simplify polynomial true))
   ([polynomial distributive?]
    (cond
-     (spec/valid? ::term polynomial)
-     (simplify-term polynomial)
+     (spec/valid? ::alg-literal polynomial) polynomial
 
-     (spec/valid? ::Sum polynomial)
-     (->> polynomial
-          (spt/transform [:polynomials spt/ALL] #(simplify % distributive?))
-          (spt/transform [:polynomials] (partial mapcat #(if (spec/valid? ::Sum %) (:polynomials %) [%])))
-          (add))
+     (spec/valid? ::exponentiation polynomial) (let [[_ base exponent] polynomial
+                                                     simplified-base (simplify base distributive?)]
+                                                 (if (number? simplified-base)
+                                                   (expt simplified-base exponent)
+                                                   (list '** simplified-base exponent)))
 
-     (spec/valid? ::Product polynomial)
-     (let [multiplicands-simplified (spt/transform [:polynomials spt/ALL]
-                                                   #(simplify % distributive?)
-                                                   polynomial)
-           multiplied (multiply multiplicands-simplified distributive?)]
-       (if (spec/valid? ::Sum multiplied)
-         (add multiplied)
-         multiplied)))))
+     (spec/valid? ::product polynomial) (->> (map #(simplify % distributive?) (rest polynomial))
+                                             (reduce #(multiply %1 %2 distributive?) 1))
 
-(defn substitute [polynomial substitution]
-  (walk/prewalk
-    #(if (spec/valid? ::term %)
-       (reduce (fn [[coefficient variables] [variable value]]
-                 [(* coefficient (expt value (variables variable 0)))
-                  (dissoc variables variable)])
-               % substitution)
-       %)
-    polynomial))
+     (spec/valid? ::sum polynomial) (->> (map #(simplify % distributive?) (rest polynomial))
+                                         (reduce add 0)))))
 
-(defn arithmetic-negate [polynomial]
-  (make-sum [[1 {}] (make-product [[-1 {}] polynomial])]))
+(def substitute #(walk/postwalk-replace %2 %1))
 
-(defn arithmetic-forall [polynomial variable]
+(defn- arithmetic-negate [polynomial]
+  "Performs arithmetic negation by converting P(x) into 1-P(x)."
+  (make-sum [1 (make-product [-1 polynomial])]))
+
+(defn- arithmetic-forall [polynomial variable]
+  "Performs an arithmetic for-all by converting P(x) into P(0)*P(1)."
   (make-product [(substitute polynomial {variable 0})
                  (substitute polynomial {variable 1})]))
 
-(defn arithmetic-exists [polynomial variable]
+(defn- arithmetic-exists [polynomial variable]
+  "Performs an arithmetic there-exists by converting P(x) into 1-(1-P(0))*(1-P(1))."
   (arithmetic-negate (make-product [(arithmetic-negate (substitute polynomial {variable 0}))
                                     (arithmetic-negate (substitute polynomial {variable 1}))])))
 
-(defn arithmetic-reduced [polynomial variable]
+(defn- arithmetic-reduced [polynomial variable]
+  "Performs an arithmetic reduction by converting P(x) into P(0)+(P(1)-P(0))*x."
   (let [subst-0 (substitute polynomial {variable 0})
         subst-1 (substitute polynomial {variable 1})]
-    (make-sum [subst-0
-               (make-product [[1 {variable 1}]
-                              (make-sum [subst-1 (make-product [[-1 {}] subst-0])])])])))
+    (make-sum [subst-0 (make-product [variable (make-sum [subst-1 (make-product [-1 subst-0])])])])))
 
 (defn arithmetize [formula]
+  "Turns a formula of boolean algebra into a polynomial. Any satisfying assignment of the boolean
+  formula will correspond to an assignment for which the polynomial evaluates to 1, provided that
+  false is translated to 0 and true to 1. Similarly, non-satisfying assignments will correspond to
+  assignments of 0 and 1 for which the polynomial evaluates to 0."
   (cond
-    (spec/valid? ::literal formula)
-    (case formula false [0 {}] true [1 {}] [1 {formula 1}])
+    (spec/valid? ::bool-literal formula)
+    (case formula false 0 true 1 formula)
 
     (spec/valid? ::negation formula)
-    (let [to-negate (second formula)]
-      (if (spec/valid? ::negation to-negate)
-        (arithmetize (second to-negate))
-        (arithmetic-negate (arithmetize to-negate))))
+    (arithmetic-negate (arithmetize (second formula)))
 
     (spec/valid? ::conjunction formula)
     (make-product (map arithmetize (rest formula)))
@@ -160,9 +136,10 @@
     (spec/valid? ::reduced formula)
     (let [[_ variable body] formula] (arithmetic-reduced (arithmetize body) variable))))
 
-(defn unquantified? [formula] (not (spec/valid? ::quantified formula)))
+(defn- unquantified? [formula] (not (spec/valid? ::quantified formula)))
 
 (defn arithmetize-simplifying [formula]
+  "Equivalent to calling calling (simplify (arithmetize formula)), but a lot faster."
   (cond
     (unquantified? formula) (simplify (arithmetize formula))
 
@@ -178,40 +155,11 @@
     (let [[_ variable body] formula]
       (simplify (arithmetic-reduced (arithmetize-simplifying body) variable)))))
 
-(defn serialize-term [[coefficient variables]]
-  (if (empty? variables)
-    (str coefficient)
-    (str (case coefficient 1 "" -1 "-" coefficient)
-         (->> variables
-              (map (fn [[base power]] (str (name base) (if (= 1 power) "" (str "^" power)))))
-              (apply str)))))
-
-(defn serialize [polynomial]
-  (cond
-    (spec/valid? ::term polynomial)
-    (serialize-term polynomial)
-
-    (spec/valid? ::Sum polynomial)
-    (reduce #(if (str/starts-with? %2 "-")
-               (str %1 " - " (subs %2 1))
-               (str %1 " + " (str %2)))
-            (map serialize (:polynomials polynomial)))
-
-    (spec/valid? ::Product polynomial)
-    (let [{terms    :term
-           sums     :Sum
-           products :Product} (group-by-polynomials (:polynomials polynomial))
-          term (reduce multiply-terms [1 {}] terms)
-          serialized-sums (apply str (map #(str \( (serialize %) \)) sums))
-          serialized-products (apply str (map #(str (serialize %)) products))
-          serialized-sums-products (str serialized-sums serialized-products)]
-      (case term
-        [0 {}] "0"
-        [1 {}] (if (empty? serialized-sums-products) "1" serialized-sums-products)
-        [-1 {}] (if (empty? serialized-sums-products) "-1" (str \- serialized-sums-products))
-        (str (serialize-term term) serialized-sums-products)))))
-
-(defn merlin [formula substitutions]
+(defn- merlin [formula substitutions]
+  "Produces a fully simplified arithmetization of the given formula, using the given substitutions
+  for any free variables. If the given formula is quantified, this function will also arithmetize the
+  body of the given formula and return that as a second element in a tuple.
+  Otherwise the second return value is nil."
   [(simplify (substitute (arithmetize-simplifying formula) substitutions))
    (if (spec/valid? ::quantified formula)
      (let [[_ variable body] formula]
@@ -219,7 +167,10 @@
            (substitute (dissoc substitutions variable))
            (simplify))))])
 
-(defn arthur [formula claim proof substitutions]
+(defn- arthur [formula claim proof substitutions]
+  "Assumes that the given proof is the correct arithmetization of the body of the formula. Using that,
+   as well as the substitutions for any free variables, verifies that the claim is indeed the correct
+   arithmetization of the entire formula."
   (if (unquantified? formula)
     (= claim (simplify (substitute (arithmetize formula) substitutions)))
     (= claim (simplify (let [[quantifier variable _] formula]
@@ -229,6 +180,7 @@
                            R (simplify (substitute (arithmetic-reduced proof variable) substitutions))))))))
 
 (defn free-variables [formula]
+  "Returns a set of a all free variables in the given quantified boolean formula."
   (if (unquantified? formula)
     (into #{} (filter keyword? (flatten formula)))
     (let [[quantifier variable body] formula]
@@ -236,13 +188,17 @@
         (recur body)
         (disj (free-variables body) variable)))))
 
-(defn interact-once [formula substitutions]
+(defn- interact-once [formula substitutions]
+  "Produces a tuple containing the given formula, Merlin's claim and proof, as well as a boolean
+  indicating whether Arthur was able to verify Merlin's claim."
   (if (= (free-variables formula) (into #{} (keys substitutions)))
     (let [[claim proof] (merlin formula substitutions)
           verified? (arthur formula claim proof substitutions)]
       [formula claim proof verified?])))
 
 (defn interact [formula test-ints]
+  "Produces a list of tuples containing the sub-formula that's currently being verified, Merlin's
+  claim and proof, as well as a boolean indicating whether Arthur was able to verify Merlin's claim."
   (loop [formula formula
          substitutions {}
          [test-int & rem-test-ints :as test-ints] test-ints
@@ -259,13 +215,36 @@
                  test-ints
                  (conj interactions (interact-once formula substitutions))))))))
 
-(defn interaction-pprint [[formula claim proof verified?]]
-  [(if (unquantified? formula) formula (take 2 formula))
-   (serialize claim)
-   (serialize proof)
-   verified?])
+(defn pprint [polynomial]
+  "Converts a polynomial into a more readable string."
+  (cond
+    (number? polynomial) (str polynomial)
+    (keyword? polynomial) (name polynomial)
+
+    (spec/valid? ::exponentiation polynomial)
+    (str (pprint (nth polynomial 1)) "^" (nth polynomial 2))
+
+    (spec/valid? ::product polynomial)
+    (let [[coefficient factors] (separate-coefficient (rest polynomial))
+          pprinted-coefficient (if (and (= -1 coefficient) (seq factors))
+                                 "-"
+                                 (str coefficient))
+          pprinted-factors (->> factors
+                                (map #(if (spec/valid? ::sum %) (str "(" (pprint %) ")") (pprint %)))
+                                (apply str))]
+      (str pprinted-coefficient pprinted-factors))
+
+    (spec/valid? ::sum polynomial)
+    (->> (map pprint (rest polynomial))
+         (reduce #(if (str/starts-with? %2 "-") (str %1 " - " (subs %2 1)) (str %1 " + " %2))))))
+
+(defn pprint-interaction [[formula proof claim verified?]]
+  "Pretty-prints both the claim and proof in the given interaction."
+  [formula (pprint claim) (pprint proof) verified?])
 
 (defn interact-manually [formula]
+  "Starts an interactive proof in the console where the test integers can be passed in and used for
+  the proof protocol one at a time."
   (loop [formula formula
          substitutions {}]
     (let [unassigned (first (remove (set (keys substitutions)) (free-variables formula)))]
@@ -274,11 +253,12 @@
           (if (re-matches #"[0-9]+" line)
             (recur formula (assoc substitutions unassigned (read-string line)))))
         (if (unquantified? formula)
-          (println (interaction-pprint (interact-once formula substitutions)))
-          (do (println (interaction-pprint (interact-once formula substitutions)))
+          (println (pprint-interaction (interact-once formula substitutions)))
+          (do (println (pprint-interaction (interact-once formula substitutions)))
               (recur (nth formula 2) substitutions)))))))
 
 (defn remove-reductions [formula]
+  "Removes all reduction operators from a quantified boolean formula."
   (if (unquantified? formula)
     formula
     (let [[quantifier variable body] formula]
@@ -287,6 +267,7 @@
         (list quantifier variable (remove-reductions body))))))
 
 (defn add-reductions [formula]
+  "Inserts the reduction operator as a appropriate in a quantified boolean formula."
   (letfn [(impl [formula]
             (if (unquantified? formula)
               (reduce #(list 'R %2 %1) formula (reverse (sort (free-variables formula))))

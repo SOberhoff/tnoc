@@ -1,22 +1,23 @@
 (in-ns 'tnoc.ip)
 
-(spec/def ::term (spec/tuple integer? (spec/map-of keyword? nat-int?)))
+(spec/def ::alg-literal (spec/or :number integer? :variable keyword?))
 
-(spec/def ::Sum
-  (spec/with-gen (partial instance? Sum)
-                 #(sgen/fmap (fn [polynomials] (->Sum polynomials))
-                             (sgen/vector (spec/gen ::polynomial)))))
+(spec/def ::exponentiation (spec/cat :operator #{'**}
+                                     :base ::polynomial
+                                     :exponent (spec/with-gen nat-int? #(sgen/choose 0 5))))
 
-(spec/def ::Product
-  (spec/with-gen (partial instance? Product)
-                 #(sgen/fmap (fn [polynomials] (->Product polynomials))
-                             (sgen/vector (spec/gen ::polynomial)))))
+(spec/def ::product (spec/cat :operator #{'*} :operands (spec/+ ::polynomial)))
 
-(spec/def ::polynomial (spec/or :term ::term
-                                :Sum ::Sum
-                                :Product ::Product))
+(spec/def ::sum (spec/cat :operator #{'+} :operands (spec/+ ::polynomial)))
 
-(spec/def ::literal (spec/or :constant boolean? :variable keyword?))
+(spec/def ::polynomial (spec/or :literal ::alg-literal
+                                :exponentiation ::exponentiation
+                                :product ::product
+                                :sum ::sum))
+
+(spec/def ::polynomials (spec/coll-of ::polynomial :kind sequential?))
+
+(spec/def ::bool-literal (spec/or :boolean boolean? :variable keyword?))
 
 (spec/def ::negation (spec/cat :not #{'not} :clause ::formula))
 
@@ -33,76 +34,123 @@
 (spec/def ::quantified (spec/or :forall ::forall :exists ::exists :reduced ::reduced))
 
 (spec/def ::formula (spec/or
-                      :literal ::literal
+                      :literal ::bool-literal
                       :negation ::negation
                       :conjuction ::conjunction
                       :disjuction ::disjunction
                       :quantified ::quantified))
 
-(spec/fdef ->Sum
-           :args (spec/cat :polynomials (spec/coll-of ::polynomial :min-count 1))
-           :ret ::Sum)
+(spec/def ::substitutions (spec/map-of keyword? integer?))
 
-(spec/fdef ->Product
-           :args (spec/cat :polynomials (spec/coll-of ::polynomial :min-count 1))
-           :ret ::Product)
-
-(spec/fdef group-by-polynomials
-           :args (spec/cat :polynomials (spec/coll-of ::polynomial))
-           :ret (spec/map-of keyword? (spec/coll-of ::polynomial)))
-
-(spec/fdef get-degree
-           :args (spec/cat :term ::term)
-           :ret nat-int?)
-
-(spec/fdef sort-polynomials
-           :args (spec/cat :polynomials (spec/coll-of ::polynomial))
-           :ret (spec/coll-of ::polynomial))
+(spec/def ::interaction (spec/tuple ::formula ::polynomial ::polynomial boolean?))
 
 (spec/fdef make-sum
-           :args (spec/cat :polynomials (spec/coll-of ::polynomial))
+           :args (spec/cat :terms ::polynomials)
            :ret ::polynomial)
 
 (spec/fdef make-product
-           :args (spec/cat :polynomials (spec/coll-of ::polynomial))
-           :ret ::Product)
+           :args (spec/cat :factors ::polynomials)
+           :ret ::polynomial)
 
-(spec/fdef simplify-term
-           :args (spec/cat :term ::term)
-           :ret ::term)
+(spec/fdef coefficient-rem-factors
+           :args (spec/cat :factors ::polynomials)
+           :ret (spec/tuple integer? ::polynomials))
 
-(spec/fdef multiply-terms
-           :args (spec/cat :term-0 ::term :term-1 ::term)
-           :ret ::term)
+(spec/fdef merge-factors
+           :args (spec/cat :factors ::polynomials)
+           :ret ::polynomial)
+
+(spec/fdef merge-terms
+           :args (spec/cat :terms ::polynomials)
+           :ret ::polynomial)
 
 (spec/fdef add
-           :args (spec/cat :sum ::Sum)
+           :args (spec/cat :polynomial-1 ::polynomial
+                           :polynomial-2 ::polynomial)
            :ret ::polynomial)
 
 (spec/fdef multiply
-           :args (spec/cat :product ::Product :distributive? boolean?)
+           :args (spec/cat :polynomial-1 ::polynomial
+                           :polynomial-2 ::polynomial
+                           :distributive? boolean?)
            :ret ::polynomial)
 
 (spec/fdef simplify
-           :args (spec/cat :polynomial ::polynomial :distributive? boolean?)
-           :ret ::polynomial)
-
-(spec/fdef substitute
-           :args (spec/cat :polynomial ::polynomial :substitution (spec/map-of keyword? integer?))
+           :args (spec/or :arity-1 (spec/cat :polynomial ::polynomial)
+                          :arity-2 (spec/cat :polynomial ::polynomial
+                                             :distributive? boolean?))
            :ret ::polynomial)
 
 (spec/fdef arithmetic-negate
            :args (spec/cat :polynomial ::polynomial)
            :ret ::polynomial)
 
+(spec/fdef arithmetic-forall
+           :args (spec/cat :polynomial ::polynomial
+                           :variable keyword?)
+           :ret ::polynomial)
+
+(spec/fdef arithmetic-exists
+           :args (spec/cat :polynomial ::polynomial
+                           :variable keyword?)
+           :ret ::polynomial)
+
+(spec/fdef arithmetic-reduced
+           :args (spec/cat :polynomial ::polynomial
+                           :variable keyword?)
+           :ret ::polynomial)
+
 (spec/fdef arithmetize
            :args (spec/cat :formula ::formula)
            :ret ::polynomial)
 
-(spec/fdef serialize-term
-           :args (spec/cat :term ::term)
+(spec/fdef arithmetize-simplifying
+           :args (spec/cat :formula ::formula)
+           :ret ::polynomial)
+
+(spec/fdef merlin
+           :args (spec/cat :formula ::formula
+                           :substitutions ::substitutions)
+           :ret (spec/tuple ::polynomial (spec/nilable ::polynomial)))
+
+(spec/fdef arthur
+           :args (spec/cat :formula ::formula
+                           :claim ::polynomial
+                           :proof (spec/nilable ::polynomial)
+                           :substitutions ::substitutions)
+           :ret boolean?)
+
+(spec/fdef free-variables
+           :args (spec/cat :formula ::formula)
+           :ret (spec/coll-of keyword? :kind set?))
+
+(spec/fdef interact-once
+           :args (spec/cat :formula ::formula
+                           :substitutions ::substitutions)
+           :ret ::interaction)
+
+(spec/fdef interact
+           :args (spec/cat :formula ::formula
+                           :test-ints (spec/coll-of integer? :kind sequential?))
+           :ret (spec/coll-of ::interaction :kind sequential?))
+
+(spec/fdef pprint
+           :args (spec/cat :polynomial (spec/nilable ::polynomial))
            :ret string?)
 
-(spec/fdef serialize
-           :args (spec/cat :polynomial ::polynomial)
-           :ret string?)
+(spec/fdef pprint-interaction
+           :args (spec/cat :interactions (spec/+ ::interaction))
+           :ret (spec/or :pprinted-interaction ::interaction
+                         :pprinted-interactions (spec/coll-of ::interaction :kind sequential?)))
+
+(spec/fdef interact-manually
+           :args (spec/cat :formula ::formula)
+           :ret nil?)
+
+(spec/fdef remove-reductions
+           :args (spec/cat :formula ::formula)
+           :ret ::formula)
+
+(spec/fdef add-interactions
+           :args (spec/cat :formula ::formula)
+           :ret ::formula)
