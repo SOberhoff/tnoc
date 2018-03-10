@@ -12,37 +12,41 @@
 
 (defn abstraction? [form] (spec/valid? ::abstraction form))
 
-(defn- loc-descendant? [ancestor loc]
-  (->> (iterate zip/up loc)
-       (take-while some?)
-       (some #{ancestor})))
+(defn- prewalk-form [form f]
+  "Walks a form in pre-order and transforms each visited sub-form using f. f is expected to take 2
+  arguments. First the current sub-form and second a set of variables that are bound in the current
+  sub-form."
+  (letfn [(impl [sub-form bound-variables]
+            (let [transformed (f sub-form bound-variables)]
+              (cond
+                (abstraction? transformed)
+                (spt/transform [(spt/nthpath 2)]
+                               #(impl % (into bound-variables (second transformed)))
+                               transformed)
 
-(defn- next-skipping-children [loc]
-  (->> (iterate zip/next loc)
-       (filter #(or (not (loc-descendant? loc %)) (zip/end? %)))
-       (first)))
+                (seq? transformed) (map #(impl % bound-variables) transformed)
+                :else transformed)))]
+    (impl form #{})))
 
-(defn- next-symbol-occurrence [symbol loc]
-  "Finds the next occurrence of `symbol` while passing over abstractions that shadow the symbol."
-  (loop [loc loc]
-    (let [node (zip/node loc)]
-      (cond
-        (zip/end? loc) nil
+(defn- postwalk-form [form f]
+  "Walks a form in post-order and transforms each visited sub-form using f. f is expected to take 2
+  arguments. First the current sub-form and second a set of variables that are bound in the current
+  sub-form."
+  (letfn [(impl [sub-form bound-variables]
+            (cond
+              (abstraction? sub-form)
+              (-> (spt/transform [(spt/nthpath 2)]
+                                 #(impl % (into bound-variables (second sub-form)))
+                                 sub-form)
+                  (f bound-variables))
 
-        (= symbol node) loc
-
-        (and (abstraction? node) (some #{symbol} (second node)))
-        (recur (next-skipping-children loc))
-
-        :else (recur (zip/next loc))))))
+              (seq? sub-form) (f (map #(impl % bound-variables) sub-form) bound-variables)
+              :else (f sub-form bound-variables)))]
+    (impl form #{})))
 
 (defn- substitute [body symbol argument]
   "Replaces every non-shadowed occurrence of `symbol` in `body` with `argument`."
-  (loop [edited-body (zip/seq-zip body)]
-    (let [next (next-symbol-occurrence symbol edited-body)]
-      (if next
-        (recur (next-skipping-children (zip/replace next argument)))
-        (zip/root edited-body)))))
+  (prewalk-form body #(if (and (symbol? %1) (= symbol %1) (not (%2 symbol))) argument %1)))
 
 (defn- fuzz-parameter [[_ params body :as abstraction] param]
   "If `param` collides with another parameter in `params`,
@@ -229,5 +233,3 @@
 (def FAC `(Y (~'fn [~'fac ~'n] ((ZERO? ~'n) 1 (MULT ~'n (~'fac (PRED ~'n)))))))
 
 (def FIB `(Y (~'fn [~'fib ~'n] ((ZERO? ~'n) 1 ((ZERO? (PRED ~'n)) 1 (ADD (~'fib (PRED ~'n)) (~'fib (PRED (PRED ~'n)))))))))
-
-(time (normalize-simplified `(FIB 7)))
