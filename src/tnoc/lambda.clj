@@ -10,6 +10,8 @@
 
 (load "lambda_spec")
 
+(defn abstraction? [form] (spec/valid? ::abstraction form))
+
 (defn- loc-descendant? [ancestor loc]
   (->> (iterate zip/up loc)
        (take-while some?)
@@ -29,7 +31,7 @@
 
         (= symbol node) loc
 
-        (and (spec/valid? ::abstraction node) (some #{symbol} (second node)))
+        (and (abstraction? node) (some #{symbol} (second node)))
         (recur (next-skipping-children loc))
 
         :else (recur (zip/next loc))))))
@@ -51,17 +53,17 @@
           new-params (mapv #(if (= param %) new-param %) params)]
       (list 'fn new-params (substitute body param new-param)))))
 
-(defn- find-free-variables [form]
+(defn- free-variables [form]
   ((fn recursive-find [form bound-variables]
      (match form
-            (([_ params body] :seq) :guard #(spec/valid? ::abstraction %)) (recursive-find body (into bound-variables params))
+            (([_ params body] :seq) :guard abstraction?) (recursive-find body (into bound-variables params))
             (nested-form :guard #(spec/valid? ::nested-form %)) (apply set/union (map #(recursive-find % bound-variables) nested-form))
             (free-variable :guard (every-pred symbol? (comp not bound-variables))) #{free-variable}
             :else #{}))
     form #{}))
 
 (defn- apply-abstraction [abstraction operand]
-  (let [[_ params body] (reduce fuzz-parameter abstraction (find-free-variables operand))]
+  (let [[_ params body] (reduce fuzz-parameter abstraction (free-variables operand))]
     (if (= 1 (count params))
       (substitute body (first params) operand)
       (list 'fn (into [] (rest params)) (substitute body (first params) operand)))))
@@ -72,48 +74,55 @@
 
 (defn- final-apply? [form]
   "Tests if `form` is of the form '(f x) where f is an abstraction."
-  (and (seq? form) (spec/valid? ::abstraction (first form)) (= 2 (count form))))
+  (and (seq? form) (abstraction? (first form)) (= 2 (count form))))
 
 (defn- non-final-apply? [form]
   "Tests if `form` is of the form '(f x & more) where f is an abstraction."
-  (and (seq? form) (spec/valid? ::abstraction (first form)) (< 2 (count form))))
-
-(defn- mergeable-abstractions? [form]
-  "Tests if form is a nested abstraction such as '(fn [x] (fn [y] ...)) which can be merged into '(fn [x y] ...)"
-  (and (spec/valid? ::abstraction form) (spec/valid? ::abstraction (nth form 2))))
+  (and (seq? form) (abstraction? (first form)) (< 2 (count form))))
 
 (defn- get-symbol [symbol]
   (if (symbol? symbol) (some-> (resolve symbol) (var-get) (#(if (seq? %) %)))))
 
 (def ^:private first-reducible-path
-  (spt/comp-paths (spt/filterer (some-fn get-symbol integer? (partial spec/valid? ::nested-form)))
+  (spt/comp-paths (spt/filterer #(or (get-symbol %) (integer? %) (spec/valid? ::nested-form %)))
                   spt/FIRST))
 
-(def normalize
-  "Takes a form to be normalized and a boolean flag `fully?` indicating whether only the next step is to be performed or
-  if the final normal form is to be found."
+(def normalize-once
   (memoize
-    (fn [form fully?]
+    (fn [form]
       (cond
-        (final-apply? form)
-        (cond-> (apply-abstraction (first form) (second form)) fully? (#(normalize % fully?)))
+        (final-apply? form) (apply-abstraction (first form) (second form))
 
-        (non-final-apply? form)
-        (cond-> (conj (drop 2 form) (apply-abstraction (first form) (second form))) fully? (#(normalize % fully?)))
+        (non-final-apply? form) (conj (drop 2 form) (apply-abstraction (first form) (second form)))
 
-        (get-symbol form) (cond-> (get-symbol form) fully? (#(normalize % fully?)))
+        (get-symbol form) (get-symbol form)
+
+        (integer? form) (church form)
+
+        (spec/valid? ::nested-form form) (spt/transform first-reducible-path normalize-once form)
+
+        :else form))))
+
+(def normalize
+  (memoize
+    (fn [form]
+      (cond
+        (final-apply? form) (recur (apply-abstraction (first form) (second form)))
+
+        (non-final-apply? form) (recur (conj (drop 2 form) (apply-abstraction (first form) (second form))))
+
+        (get-symbol form) (recur (get-symbol form))
 
         (integer? form) (church form)
 
         (spec/valid? ::nested-form form)
-        (#(if (and fully? (not= form %)) (normalize % fully?) %)
-          (spt/compiled-transform first-reducible-path #(normalize % fully?) form))
+        (let [normalized (spt/transform first-reducible-path normalize form)]
+          (if (= form normalized) form (recur normalized)))
 
         :else form))))
 
-(defn normal-form [form] (normalize form true))
 
-(defn normal-form? [form] (= form (normalize form false)))
+(defn normalized? [form] (= form (normalize-once form)))
 
 (defn- merge-abstractions [[_ outer-params [_ inner-params body]]]
   "Simplifies a nested abstraction of the form '(fn [x & more] (fn [y & more] ...)) into '(fn [x y & more] ...)"
@@ -121,55 +130,46 @@
                    (into inner-params))]
     (list 'fn params body)))
 
-(defn normalize-simplified [form fully?]
-  "Like `normalize` but also tries to normalize bodies of abstractions."
-  (loop [next (zip/seq-zip (normalize form fully?))]
-    (cond
-      (and (not fully?) (not= form (zip/root next))) (zip/root next)
+(defn normalize-simplified-once [form]
+  (if (abstraction? form)
+    (if (abstraction? (nth form 2))
+      (merge-abstractions form)
+      (spt/transform [(spt/nthpath 2)] normalize-simplified-once form))
+    (normalize-once form)))
 
-      (zip/end? next) (zip/root next)
-
-      (mergeable-abstractions? (zip/node next))
-      (let [replaced (zip/replace next (merge-abstractions (zip/node next)))]
-        (if fully? (recur replaced) (zip/root replaced)))
-
-      (spec/valid? ::abstraction (zip/node next))
-      (let [[_ params body] (zip/node next)
-            normalized-body (normalize body fully?)]
-        (if (= body normalized-body)
-          (recur (zip/next next))
-          (let [replaced (zip/replace next (list 'fn params normalized-body))]
-            (if fully? (recur replaced) (zip/root replaced)))))
-
-      :else (recur (zip/next next)))))
-
-(defn normal-form-simplified [form]
+(defn normalize-simplified [form]
   "Like `normal-form` but also tries to normalize bodies of abstractions."
-  (normalize-simplified form true))
+  (let [normalized (normalize form)]
+    (if (abstraction? normalized)
+      (let [with-normalized-body (spt/transform [(spt/nthpath 2)] normalize-simplified normalized)]
+        (if (abstraction? (nth with-normalized-body 2))
+          (merge-abstractions with-normalized-body)
+          with-normalized-body))
+      normalized)))
 
-(defn normal-form-simplified? [form] (= form (normalize-simplified form false)))
+(defn normalize-simplified? [form] (= form (normalize-simplified-once form)))
 
-(defn normal-form-reductions [form]
+(defn normalize-reductions [form]
   "Produces a lazy seq of reductions on the path to normal form."
-  (reductions #(if (normal-form? %2) (reduced %2) %2) (iterate #(normalize % false) form)))
+  (reductions #(if (normalized? %2) (reduced %2) %2) (iterate #(normalize %) form)))
 
-(defn normal-form-reductions-simplified [form]
+(defn normalize-simplified-reductions [form]
   "Like `normal-form-reductions` but also tries to normalize bodies of abstractions."
-  (reductions #(if (normal-form-simplified? %2) (reduced %2) %2) (iterate #(normalize-simplified % false) form)))
+  (reductions #(if (normalize-simplified? %2) (reduced %2) %2) (iterate #(normalize-simplified-once %) form)))
 
 (defn println-reductions [form]
   "Like `normal-form-reductions` but printlns the reductions with line numbers instead."
-  (doseq [[index reduction] (map-indexed vector (normal-form-reductions form))]
+  (doseq [[index reduction] (map-indexed vector (normalize-reductions form))]
     (println (str index ": " (pr-str reduction)))))
 
 (defn println-reductions-simplified [form]
   "Like `normal-form-reductions-simplified` but printlns the reductions with line numbers instead."
-  (doseq [[index reduction] (map-indexed vector (normal-form-reductions-simplified form))]
+  (doseq [[index reduction] (map-indexed vector (normalize-simplified-reductions form))]
     (println (str index ": " (pr-str reduction)))))
 
 (defn unchurch [church-numeral]
   "Inverse of `church`. Will also attempt to invert church numerals not in the standard form '(fn [f x] (f (f (...f x)...)))"
-  (eval (list (normal-form-simplified church-numeral) inc 0)))
+  (eval (list (normalize-simplified church-numeral) inc 0)))
 
 (defn resolve-references [form]
   "Replaces all references with their definitions and integers with their Church numerals."
@@ -229,3 +229,5 @@
 (def FAC `(Y (~'fn [~'fac ~'n] ((ZERO? ~'n) 1 (MULT ~'n (~'fac (PRED ~'n)))))))
 
 (def FIB `(Y (~'fn [~'fib ~'n] ((ZERO? ~'n) 1 ((ZERO? (PRED ~'n)) 1 (ADD (~'fib (PRED ~'n)) (~'fib (PRED (PRED ~'n)))))))))
+
+(time (normalize-simplified `(FIB 7)))
