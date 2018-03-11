@@ -28,22 +28,6 @@
                 :else transformed)))]
     (impl form #{})))
 
-(defn- postwalk-form [form f]
-  "Walks a form in post-order and transforms each visited sub-form using f. f is expected to take 2
-  arguments. First the current sub-form and second a set of variables that are bound in the current
-  sub-form."
-  (letfn [(impl [sub-form bound-variables]
-            (cond
-              (abstraction? sub-form)
-              (-> (spt/transform [(spt/nthpath 2)]
-                                 #(impl % (into bound-variables (second sub-form)))
-                                 sub-form)
-                  (f bound-variables))
-
-              (seq? sub-form) (f (map #(impl % bound-variables) sub-form) bound-variables)
-              :else (f sub-form bound-variables)))]
-    (impl form #{})))
-
 (defn- substitute [body symbol argument]
   "Replaces every non-shadowed occurrence of `symbol` in `body` with `argument`."
   (prewalk-form body #(if (and (symbol? %1) (= symbol %1) (not (%2 symbol))) argument %1)))
@@ -92,6 +76,7 @@
                   spt/FIRST))
 
 (def normalize-once
+  "Performs a single reduction step on the given form."
   (memoize
     (fn [form]
       (cond
@@ -108,6 +93,7 @@
         :else form))))
 
 (def normalize
+  "Performs reductions on the given form until no more are possible."
   (memoize
     (fn [form]
       (cond
@@ -125,7 +111,6 @@
 
         :else form))))
 
-
 (defn normalized? [form] (= form (normalize-once form)))
 
 (defn- merge-abstractions [[_ outer-params [_ inner-params body]]]
@@ -135,6 +120,7 @@
     (list 'fn params body)))
 
 (defn normalize-simplified-once [form]
+  "Like normalize-once but also normalizes the bodies of abstractions."
   (if (abstraction? form)
     (if (abstraction? (nth form 2))
       (merge-abstractions form)
@@ -142,7 +128,8 @@
     (normalize-once form)))
 
 (defn normalize-simplified [form]
-  "Like `normal-form` but also tries to normalize bodies of abstractions."
+  "Like normalize but also normalizes the bodies of abstractions as much as possible. Note that
+  this may result in infinite loops that wouldn't occur when calling normalize."
   (let [normalized (normalize form)]
     (if (abstraction? normalized)
       (let [with-normalized-body (spt/transform [(spt/nthpath 2)] normalize-simplified normalized)]
@@ -158,21 +145,22 @@
   (reductions #(if (normalized? %2) (reduced %2) %2) (iterate #(normalize %) form)))
 
 (defn normalize-simplified-reductions [form]
-  "Like `normal-form-reductions` but also tries to normalize bodies of abstractions."
+  "Like normalize-reductions but also tries to normalize bodies of abstractions."
   (reductions #(if (normalize-simplified? %2) (reduced %2) %2) (iterate #(normalize-simplified-once %) form)))
 
 (defn println-reductions [form]
-  "Like `normal-form-reductions` but printlns the reductions with line numbers instead."
+  "Like normalize-reductions but printlns the reductions with line numbers instead."
   (doseq [[index reduction] (map-indexed vector (normalize-reductions form))]
     (println (str index ": " (pr-str reduction)))))
 
 (defn println-reductions-simplified [form]
-  "Like `normal-form-reductions-simplified` but printlns the reductions with line numbers instead."
+  "Like normalize-simplified-reductions but printlns the reductions with line numbers instead."
   (doseq [[index reduction] (map-indexed vector (normalize-simplified-reductions form))]
     (println (str index ": " (pr-str reduction)))))
 
 (defn unchurch [church-numeral]
-  "Inverse of `church`. Will also attempt to invert church numerals not in the standard form '(fn [f x] (f (f (...f x)...)))"
+  "Inverse of church. Will also attempt to invert church numerals not in the standard form
+  '(fn [f x] (f (f (...f x)...)))"
   (eval (list (normalize-simplified church-numeral) inc 0)))
 
 (defn resolve-references [form]

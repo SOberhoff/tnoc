@@ -13,6 +13,13 @@
                           :abstraction ::abstraction
                           :nested-form ::nested-form))
 
+(spec/fdef prewalk-form
+           :args (spec/cat :form ::form
+                           :f (spec/fspec :args (spec/cat :form ::form
+                                                          :bound-variables (spec/coll-of symbol? :kind set?))
+                                          :ret ::form))
+           :ret ::form)
+
 (spec/fdef substitute
            :args (spec/cat :body ::nested-form, :param ::symbol, :argument ::form)
            :ret ::form)
