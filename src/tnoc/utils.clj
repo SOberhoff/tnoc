@@ -3,10 +3,23 @@
             [clojure.math.numeric-tower :refer [ceil]])
   (:import (java.util Random)))
 
+(defn take-until
+  "Returns a lazy sequence of successive items from coll until
+   (pred item) returns true, including that item. pred must be
+   free of side-effects."
+  [pred coll]
+  (lazy-seq
+    (when-let [s (seq coll)]
+      (if (pred (first s))
+        (cons (first s) nil)
+        (cons (first s) (take-until pred (rest s)))))))
+
 (defn log [b x]
+  "Computes the logarithm base b of x."
   (/ (Math/log x) (Math/log b)))
 
 (defn next-int [x]
+  "Determines the next higher int following x. Returns x + 1 if x is already an integer."
   (let [c (ceil x)]
     (if (zero? (- c x))
       (int (inc x))
