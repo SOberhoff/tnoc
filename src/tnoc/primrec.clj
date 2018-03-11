@@ -1,10 +1,10 @@
-(ns tnoc.primitive-recursion
+(ns tnoc.primrec
   (:require [clojure.core.match :refer [match]]
             [clojure.walk :as walk]
             [clojure.spec.alpha :as spec]
             [com.rpl.specter :as spt]))
 
-(load "primitive_recursion_spec")
+(load "primrec_spec")
 
 (defn- S-to-inc [body] (walk/postwalk-replace {'S 'inc} body))
 
