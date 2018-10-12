@@ -21,10 +21,10 @@
                               (and (or :x :y :z) (or (not :x) (not :y) (not :z)))))))))))))
 
 (deftest phi-test
-  (is (every? identity (map #(nth % 3) (interact phi [3 2 5])))))
+  (is (every? identity (map :verified? (interact phi [3 2 5])))))
 
 (deftest phi-R-test
-  (is (every? identity (map #(nth % 3) (interact phi-R [3 2 5])))))
+  (is (every? identity (map :verified? (interact phi-R [3 2 5])))))
 
 (def polynomial-and-substitutions-gen
   (tcgen/let [polynomial (spec/gen :tnoc.ip/polynomial)
@@ -55,5 +55,5 @@
          (tcprop/for-all [formula (spec/gen :tnoc.ip/formula)]
                          (->> (repeatedly #(rand-int 20))
                               (interact formula)
-                              (map #(nth % 3))
+                              (map :verified?)
                               (every? identity))))

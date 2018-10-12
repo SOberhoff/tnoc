@@ -139,7 +139,7 @@
 (defn- unquantified? [formula] (not (spec/valid? ::quantified formula)))
 
 (defn arithmetize-simplifying [formula]
-  "Equivalent to calling calling (simplify (arithmetize formula)), but a lot faster."
+  "Equivalent to calling (simplify (arithmetize formula)), but a lot faster."
   (cond
     (unquantified? formula) (simplify (arithmetize formula))
 
@@ -189,12 +189,15 @@
         (disj (free-variables body) variable)))))
 
 (defn- interact-once [formula substitutions]
-  "Produces a tuple containing the given formula, Merlin's claim and proof, as well as a boolean
+  "Produces a map containing the given formula, Merlin's claim and proof, as well as a boolean
   indicating whether Arthur was able to verify Merlin's claim."
   (if (= (free-variables formula) (into #{} (keys substitutions)))
     (let [[claim proof] (merlin formula substitutions)
           verified? (arthur formula claim proof substitutions)]
-      [formula claim proof verified?])))
+      {:formula   formula
+       :claim     claim
+       :proof     proof
+       :verified? verified?})))
 
 (defn interact [formula test-ints]
   "Produces a list of tuples containing the sub-formula that's currently being verified, Merlin's
@@ -238,9 +241,12 @@
     (->> (map pprint (rest polynomial))
          (reduce #(if (str/starts-with? %2 "-") (str %1 " - " (subs %2 1)) (str %1 " + " %2))))))
 
-(defn pprint-interaction [[formula proof claim verified?]]
+(defn pprint-interaction [{formula :formula  claim :claim proof :proof verified? :verified?}]
   "Pretty-prints both the claim and proof in the given interaction."
-  [formula (pprint claim) (pprint proof) verified?])
+  {:formula formula
+   :claim (pprint claim)
+   :proof (pprint proof)
+   :verified? verified?})
 
 (defn interact-manually [formula]
   "Starts an interactive proof in the console where the test integers can be passed in and used for
