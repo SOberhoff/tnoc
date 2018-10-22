@@ -1,5 +1,5 @@
-(ns tnoc.primitive-recursion-test
-  (:require [tnoc.primitive-recursion :refer :all]
+(ns tnoc.primrec-test
+  (:require [tnoc.primrec :refer :all]
             [clojure.test :refer [deftest is]]
             [clojure.test.check.clojure-test :refer [defspec]]
             [clojure.test.check :as tc]

@@ -13,6 +13,13 @@
                           :abstraction ::abstraction
                           :nested-form ::nested-form))
 
+(spec/fdef prewalk-form
+           :args (spec/cat :form ::form
+                           :f (spec/fspec :args (spec/cat :form ::form
+                                                          :bound-variables (spec/coll-of symbol? :kind set?))
+                                          :ret ::form))
+           :ret ::form)
+
 (spec/fdef substitute
            :args (spec/cat :body ::nested-form, :param ::symbol, :argument ::form)
            :ret ::form)
@@ -21,7 +28,7 @@
            :args (spec/cat :abstraction ::abstraction, :param ::symbol)
            :ret ::abstraction)
 
-(spec/fdef find-free-variables
+(spec/fdef free-variables
            :args (spec/cat :form ::form)
            :ret (spec/coll-of ::symbol :kind set?))
 
@@ -41,34 +48,30 @@
            :args (spec/cat :form ::form)
            :ret boolean?)
 
-(spec/fdef mergeable-abstraction?
-           :args (spec/cat :form ::form)
-           :ret boolean?)
-
 (spec/fdef get-symbol
            :ret (spec/nilable ::form))
 
+(spec/fdef normalize-once
+           :args (spec/cat :form ::form)
+           :ret ::form)
+
 (spec/fdef normalize
-           :args (spec/cat :form ::form, :fully? boolean?)
+           :args (spec/cat :form ::form)
+           :ret ::form)
+
+(spec/fdef normalize-simplified-once
+           :args (spec/cat :form ::form)
            :ret ::form)
 
 (spec/fdef normalize-simplified
-           :args (spec/cat :form ::form, :fully? boolean?)
-           :ret ::form)
-
-(spec/fdef normal-form
            :args (spec/cat :form ::form)
            :ret ::form)
 
-(spec/fdef normal-form-simplified
-           :args (spec/cat :form ::form)
-           :ret ::form)
-
-(spec/fdef normal-form-reductions
+(spec/fdef normalize-reductions
            :args (spec/cat :form ::form)
            :ret (spec/coll-of ::form, :kind seq?, :min-count 1))
 
-(spec/fdef normal-form-reductions-simplified
+(spec/fdef normalize-simplified-reductions
            :args (spec/cat :form ::form)
            :ret (spec/coll-of ::form, :kind seq?, :min-count 1))
 
@@ -79,3 +82,11 @@
 (spec/fdef println-reductions-simplified
            :args (spec/cat :form ::form)
            :ret nil?)
+
+(spec/fdef unchurch
+           :args (spec/cat :church-numeral ::abstraction)
+           :ret integer?)
+
+(spec/fdef resolve-references
+           :args (spec/cat :form ::form)
+           :ret ::form)

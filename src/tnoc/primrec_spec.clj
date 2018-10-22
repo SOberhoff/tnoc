@@ -1,4 +1,4 @@
-(in-ns 'tnoc.primitive-recursion)
+(in-ns 'tnoc.primrec)
 
 (spec/def ::var (spec/and symbol? (comp not #{'_})))
 

@@ -1,10 +1,10 @@
-(ns tnoc.primitive-recursion
+(ns tnoc.primrec
   (:require [clojure.core.match :refer [match]]
             [clojure.walk :as walk]
             [clojure.spec.alpha :as spec]
             [com.rpl.specter :as spt]))
 
-(load "primitive_recursion_spec")
+(load "primrec_spec")
 
 (defn- S-to-inc [body] (walk/postwalk-replace {'S 'inc} body))
 
@@ -105,9 +105,10 @@
                            (grt (exp (S (S 0)) (sub x (S y))) x)))
 
 (primrec ^{:doc "floor of base 2 logarithm"}
-         lg [x] (lg-rec x x))
+         lg
+         [x] (lg-rec x x))
 
-(primrec ^{:doc "trianlge numbers: n*(n-1)/2"}
+(primrec ^{:doc "trianlge numbers: n*(n+1)/2"}
          triangle
          [0] 0
          [(S x)] (add (triangle x) (S x)))
@@ -121,7 +122,8 @@
                            (grt (triangle (sub x (S y))) x)))
 
 (primrec ^{:doc "inverse of the next smaller or equal triangle number"}
-         inv-triangle [x] (inv-triangle-rec x x))
+         inv-triangle
+         [x] (inv-triangle-rec x x))
 
 (primrec pair
          [x y] (add (triangle (add x y)) y))
