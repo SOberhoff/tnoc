@@ -6,7 +6,7 @@
             [clojure.test.check.clojure-test :refer [defspec]]
             [clojure.test.check.properties :as tcprop]))
 
-(def-turing-machine
+(def-tm
   even-turing
   {:EVEN {\0 [:>>]
           \1 [:>> :ODD]}

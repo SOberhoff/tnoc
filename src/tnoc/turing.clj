@@ -40,10 +40,10 @@
 
 
 (defn- expand-multi-key [transition-fns]
-  "Expands sets used as keys in the definition of Turing machine transition functions into the
+  "Expands vectors used as keys in the definition of Turing machine transition functions into the
   corresponding character-key transition functions."
   (-> (fn [new-transition-fns [key val]]
-        (if (set? key)
+        (if (vector? key)
           (reduce #(assoc %1 %2 val) new-transition-fns key)
           (assoc new-transition-fns key val)))
       (reduce {} transition-fns)))
@@ -60,12 +60,12 @@
        (into {})
        (conj [current-state])))
 
-(defmacro def-turing-machine [name specification]
+(defmacro def-tm [name specification]
   "A Turing machine is defined as a map from states to transition functions. Transition functions
   in turn are a map that associates current symbols with transitions. Finally transitions are a
   3-tuple of the form [next-symbol direction next-state].
   Using this macro also allows a few shorthand notations. If several current symbols lead to the
-  same transition, those current symbols can be grouped together into a set that maps to the shared
+  same transition, those current symbols can be grouped together into a vector that maps to the shared
   transition. Also if the current symbol or the current state aren't changed, they may be omitted
   from transitions. (Omitting the next symbol is particularly useful when grouping together current
   symbols.)"
@@ -78,63 +78,183 @@
 
 
 ; A universal Turing machine
-(def-turing-machine
+(def-tm
   U
-  {:WRITE?          {\0                   [\A :<< :DIRECTION?-0]
-                     \1                   [\B :<< :DIRECTION?-1]
-                     #{\A \B \C \D \M \X} [:<<]}
-   :DIRECTION?-0    {\0 [\A :>> :GOTO-TAPE-0]
-                     \1 [\B :>> :GOTO-TAPE-1]}
-   :DIRECTION?-1    {\0 [\A :>> :GOTO-TAPE-2]
-                     \1 [\B :>> :GOTO-TAPE-3]}
-   :GOTO-TAPE-0     {\0                   [\0 :<< :READ]
-                     \1                   [\0 :<< :READ]
-                     #{\A \B \C \D \M \X} [:>>]}
-   :GOTO-TAPE-1     {\0                   [\A :>> :READ]
-                     \1                   [\A :>> :READ]
-                     #{\A \B \C \D \M \X} [:>>]}
-   :GOTO-TAPE-2     {\0                   [\1 :<< :READ]
-                     \1                   [\1 :<< :READ]
-                     #{\A \B \C \D \M \X} [:>>]}
-   :GOTO-TAPE-3     {\0                   [\B :>> :READ]
-                     \1                   [\B :>> :READ]
-                     #{\A \B \C \D \M \X} [:>>]}
-   :READ            {\0 [\0 :<< :IF-ZERO]
-                     \1 [\1 :<< :GOTO-TRANSITION]
-                     \A [\0 :<< :IF-ZERO]
-                     \B [\1 :<< :GOTO-TRANSITION]}
-   :IF-ZERO         {\0             [\A :<<]
-                     \1             [\B :<<]
-                     \C             [\D :<< :GOTO-TRANSITION]
-                     #{\A \B \D \M} [:<<]}
-   :GOTO-TRANSITION {\0             [\A :<< :<<MARK]
-                     \1             [\B :>> :>>MARK]
-                     #{\C \X}       [:>> :>>CLEANUP]
-                     #{\A \B \D \M} [:<<]}
-   :>>MARK          {\M             [\0 :<< :>>REWIND]
-                     #{\0 \A \B \D} [:>>]}
-   :>>REWIND        {\1             [\B :>> :>>MARK]
-                     #{\C \X}       [:>> :>>CLEANUP]
-                     #{\0 \A \B \D} [:<<]}
-   :>>CLEANUP       {\0 [\X :>>]
-                     \A [\0 :>>]
-                     \B [\1 :>>]
-                     \D [\C :>>]
-                     \M [:<< :WRITE?]}
-   :<<MARK          {#{\0 \1 \B \C} [:<<]
-                     \M             [\B :<<]
-                     \X             [\M :>> :<<REWIND]}
-   :<<REWIND        {#{\0 \1 \B \C} [:>>]
-                     \A             [:<< :<<MARK-AGAIN?]}
-   :<<MARK-AGAIN?   {\0 [\A :<< :<<MARK]
-                     \B [\M :<< :<<CLEANUP]
-                     \C [\D :<< :<<CLEANUP]
-                     \M [:<< :WRITE?]}
-   :<<CLEANUP       {\0 [\A :<<]
-                     \1 [\B :<<]
-                     \B [\M :<<]
-                     \C [\D :<<]
-                     \M [:<< :WRITE?]}})
+  {:READ            {\o      [\O :<< :TO-STATE-O]
+                     \i      [\I :<< :TO-STATE-I]
+                     \u      [\U :<< :TO-STATE-U]
+                     \_      [\U :<< :TO-STATE-U]
+                     [\a \A] [:>> :INIT-SHIFT]}
+
+   ; shift over the tape by one place to make space on the left
+   :INIT-SHIFT      {\o [\u :>> :SHIFT-O]
+                     \i [\u :>> :SHIFT-I]
+                     \u [\u :>> :SHIFT-U]}
+   :SHIFT-O         {\o [:>>]
+                     \i [\o :>> :SHIFT-I]
+                     \u [\o :>> :SHIFT-U]
+                     \_ [\o :<< :TO-START]}
+   :SHIFT-I         {\o [\i :>> :SHIFT-O]
+                     \i [:>>]
+                     \u [\i :>> :SHIFT-U]
+                     \_ [\i :<< :TO-START]}
+   :SHIFT-U         {\o [\u :>> :SHIFT-O]
+                     \i [\u :>> :SHIFT-I]
+                     \u [:>>]
+                     \_ [\u :<< :TO-START]}
+   :TO-START        {[\o \i \u] [:<<]
+                     [\a \A]    [:>> :READ]}
+
+   ; move to the description of the current state
+   :TO-STATE-O      {[\o \i \u \l \r \s \t \a \b \c] [:<<]
+                     \A                              [\a :<< :INIT-MARK]}
+   :TO-STATE-I      {[\o \i \u \l \r \s \t \a \b \c] [:<<]
+                     \A                              [\a :<< :TO-TRANSITION-I]}
+   :TO-STATE-U      {[\o \i \u \l \r \s \t \a \b \c] [:<<]
+                     \A                              [\a :<< :TO-TRANSITION-U]}
+
+   ; move to the description of the appropriate transition
+   :TO-TRANSITION-I {[\o \i \u \l \r \s \t \a] [:<<]
+                     \b                        [:<< :INIT-MARK]}
+   :TO-TRANSITION-U {[\o \i \u \l \r \s \t \a \b] [:<<]
+                     \c                           [:<< :INIT-MARK]}
+
+   ; mark which state to transition to
+   :INIT-MARK       {\l [\L :<< :<<MARK]
+                     \r [\R :>> :>>MARK]
+                     \o [:<< :MOVE-O]
+                     \i [:<< :MOVE-I]
+                     \u [:<< :MOVE-U]}
+   :<<MARK          {[\o \i \u \l \r \s \t \@ \b \c] [:<<]
+                     \A                              [\@ :<<]
+                     \a                              [\A :>> :>>REWIND]}
+   :>>MARK          {[\o \i \u \l \r \s \t \@ \b \c \R] [:>>]
+                     \A                                 [\@ :>>]
+                     \a                                 [\A :<< :<<REWIND]}
+   :>>REWIND        {[\o \i \u \l \r \s \t \b \c] [:>>]
+                     \L                           [\l :<< :INIT-MARK]
+                     \R                           [\r :<< :INIT-MARK]}
+   :<<REWIND        {[\o \i \u \l \r \s \t \b \c] [:<<]
+                     \L                           [\l :<< :INIT-MARK]
+                     \R                           [\r :<< :INIT-MARK]}
+
+   ; determine in which direction to move next
+   :MOVE-O          {\l [:>> :INIT-CLEAN-O-L]
+                     \r [:>> :INIT-CLEAN-O-R]
+                     \s [:>> :INIT-CLEAN-O-S]}
+   :MOVE-I          {\l [:>> :INIT-CLEAN-I-L]
+                     \r [:>> :INIT-CLEAN-I-R]
+                     \s [:>> :INIT-CLEAN-I-S]}
+   :MOVE-U          {\l [:>> :INIT-CLEAN-U-L]
+                     \r [:>> :INIT-CLEAN-U-R]
+                     \s [:>> :INIT-CLEAN-U-S]}
+
+   ; figure out in which direction to clean up
+   :INIT-CLEAN-O-L  {[\o \i \u] [:>>]
+                     \L         [:<< :<<CLEAN-O-L]
+                     \R         [:>> :>>CLEAN-O-L]}
+   :INIT-CLEAN-O-R  {[\o \i \u] [:>>]
+                     \L         [:<< :<<CLEAN-O-R]
+                     \R         [:>> :>>CLEAN-O-R]}
+   :INIT-CLEAN-O-S  {[\o \i \u] [:>>]
+                     \L         [:<< :<<CLEAN-O-S]
+                     \R         [:>> :>>CLEAN-O-S]}
+   :INIT-CLEAN-I-L  {[\o \i \u] [:>>]
+                     \L         [:<< :<<CLEAN-I-L]
+                     \R         [:>> :>>CLEAN-I-L]}
+   :INIT-CLEAN-I-R  {[\o \i \u] [:>>]
+                     \L         [:<< :<<CLEAN-I-R]
+                     \R         [:>> :>>CLEAN-I-R]}
+   :INIT-CLEAN-I-S  {[\o \i \u] [:>>]
+                     \L         [:<< :<<CLEAN-I-S]
+                     \R         [:>> :>>CLEAN-I-S]}
+   :INIT-CLEAN-U-L  {[\o \i \u] [:>>]
+                     \L         [:<< :<<CLEAN-U-L]
+                     \R         [:>> :>>CLEAN-U-L]}
+   :INIT-CLEAN-U-R  {[\o \i \u] [:>>]
+                     \L         [:<< :<<CLEAN-U-R]
+                     \R         [:>> :>>CLEAN-U-R]}
+   :INIT-CLEAN-U-S  {[\o \i \u] [:>>]
+                     \L         [:<< :<<CLEAN-U-S]
+                     \R         [:>> :>>CLEAN-U-S]}
+
+   ; clean up to the left
+   :<<CLEAN-O-L     {[\o \i \u \l \r \s \t \b \c] [:<<]
+                     \@                           [\a :<<]
+                     \A                           [:>> :TO-TAPE-O-L]}
+   :<<CLEAN-O-R     {[\o \i \u \l \r \s \t \b \c] [:<<]
+                     \@                           [\a :<<]
+                     \A                           [:>> :TO-TAPE-O-R]}
+   :<<CLEAN-O-S     {[\o \i \u \l \r \s \t \b \c] [:<<]
+                     \@                           [\a :<<]
+                     \A                           [:>> :TO-TAPE-O-S]}
+   :<<CLEAN-I-L     {[\o \i \u \l \r \s \t \b \c] [:<<]
+                     \@                           [\a :<<]
+                     \A                           [:>> :TO-TAPE-I-L]}
+   :<<CLEAN-I-R     {[\o \i \u \l \r \s \t \b \c] [:<<]
+                     \@                           [\a :<<]
+                     \A                           [:>> :TO-TAPE-I-R]}
+   :<<CLEAN-I-S     {[\o \i \u \l \r \s \t \b \c] [:<<]
+                     \@                           [\a :<<]
+                     \A                           [:>> :TO-TAPE-I-S]}
+   :<<CLEAN-U-L     {[\o \i \u \l \r \s \t \b \c] [:<<]
+                     \@                           [\a :<<]
+                     \A                           [:>> :TO-TAPE-U-L]}
+   :<<CLEAN-U-R     {[\o \i \u \l \r \s \t \b \c] [:<<]
+                     \@                           [\a :<<]
+                     \A                           [:>> :TO-TAPE-U-R]}
+   :<<CLEAN-U-S     {[\o \i \u \l \r \s \t \b \c] [:<<]
+                     \@                           [\a :<<]
+                     \A                           [:>> :TO-TAPE-U-S]}
+
+   ; clean up to the right
+   :>>CLEAN-O-L     {[\o \i \u \l \r \s \t \b \c] [:>>]
+                     \@                           [\a :>>]
+                     \A                           [:>> :TO-TAPE-O-L]}
+   :>>CLEAN-O-R     {[\o \i \u \l \r \s \t \b \c] [:>>]
+                     \@                           [\a :>>]
+                     \A                           [:>> :TO-TAPE-O-R]}
+   :>>CLEAN-O-S     {[\o \i \u \l \r \s \t \b \c] [:>>]
+                     \@                           [\a :>>]
+                     \A                           [:>> :TO-TAPE-O-S]}
+   :>>CLEAN-I-L     {[\o \i \u \l \r \s \t \b \c] :>>
+                     \@                           [\a :>>]
+                     \A                           [:>> :TO-TAPE-I-L]}
+   :>>CLEAN-I-R     {[\o \i \u \l \r \s \t \b \c] :>>
+                     \@                           [\a :>>]
+                     \A                           [:>> :TO-TAPE-I-R]}
+   :>>CLEAN-I-S     {[\o \i \u \l \r \s \t \b \c] [:>>]
+                     \@                           [\a :>>]
+                     \A                           [:>> :TO-TAPE-I-S]}
+   :>>CLEAN-U-L     {[\o \i \u \l \r \s \t \b \c] [:>>]
+                     \@                           [\a :>>]
+                     \A                           [:>> :TO-TAPE-U-L]}
+   :>>CLEAN-U-R     {[\o \i \u \l \r \s \t \b \c] [:>>]
+                     \@                           [\a :>>]
+                     \A                           [:>> :TO-TAPE-U-R]}
+   :>>CLEAN-U-S     {[\o \i \u \l \r \s \t \b \c] [:>>]
+                     \@                           [\a :>>]
+                     \A                           [:>> :TO-TAPE-U-S]}
+
+   ; move back to the marked position on the tape
+   :TO-TAPE-O-L     {[\o \i \u \l \r \s \t \a \b \c] [:>>]
+                     [\O \I \U]                      [\o :>> :READ]}
+   :TO-TAPE-O-R     {[\o \i \u \l \r \s \t \a \b \c] [:<<]
+                     [\O \I \U]                      [\o :>> :READ]}
+   :TO-TAPE-O-S     {[\o \i \u \l \r \s \t \a \b \c] [:<>]
+                     [\O \I \U]                      [\o :>> :READ]}
+   :TO-TAPE-I-L     {[\o \i \u \l \r \s \t \a \b \c] [:>>]
+                     [\O \I \U]                      [\i :>> :READ]}
+   :TO-TAPE-I-R     {[\o \i \u \l \r \s \t \a \b \c] [:<<]
+                     [\O \I \U]                      [\i :>> :READ]}
+   :TO-TAPE-I-S     {[\o \i \u \l \r \s \t \a \b \c] [:<>]
+                     [\O \I \U]                      [\i :>> :READ]}
+   :TO-TAPE-U-L     {[\o \i \u \l \r \s \t \a \b \c] [:>>]
+                     [\O \I \U]                      [\u :>> :READ]}
+   :TO-TAPE-U-R     {[\o \i \u \l \r \s \t \a \b \c] [:<<]
+                     [\O \I \U]                      [\u :>> :READ]}
+   :TO-TAPE-U-S     {[\o \i \u \l \r \s \t \a \b \c] [:<>]
+                     [\O \I \U]                      [\u :>> :READ]}})
 
 
 
