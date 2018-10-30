@@ -14,6 +14,14 @@
         (cons (first s) nil)
         (cons (first s) (take-until pred (rest s)))))))
 
+(defn index-of [pred seq]
+  "Finds the index of the first element satisfying pred. Returns -1 if no matching element can be found."
+  (loop [[first & rest] seq
+         index 0]
+    (cond (pred first) index
+          (nil? rest) -1
+          :else (recur rest (inc index)))))
+
 (defn log [b x]
   "Computes the logarithm base b of x."
   (/ (Math/log x) (Math/log b)))
