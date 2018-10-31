@@ -316,11 +316,11 @@
      :tape     (str state-segment tape-segment)
      :position (+ position (count state-segment))}))
 
-(defn decompile-from-U-configuration [turing-machine {U-tape :tape}]
+(defn decompile-from-U-configuration [turing-machine {U-tape :tape U-position :position}]
   "Reproduces the configuration of the given Turing machine from the given configuration of the
   universal Turing machine U."
-  (let [state (nth (keys turing-machine) (index-of #{\A} (filter #{\a \A} U-tape)))
-        tape (subs U-tape (inc (max (.lastIndexOf U-tape "a") (.lastIndexOf U-tape "A"))))]
-    {:state    state
-     :tape     (apply str (map #(case % \o \0 \i \1 \u \_) (str/lower-case tape)))
-     :position (max (.lastIndexOf tape "O") (.lastIndexOf tape "I") (.lastIndexOf tape "U"))}))
+  (let [state-segment-len (inc (max (.lastIndexOf U-tape "a") (.lastIndexOf U-tape "A")))
+        tape-segment (subs U-tape state-segment-len)]
+    {:state    (nth (keys turing-machine) (index-of #{\A} (filter #{\a \A} U-tape)))
+     :tape     (apply str (map #(case % \o \0 \i \1 \u \_) (str/lower-case tape-segment)))
+     :position (- U-position state-segment-len)}))

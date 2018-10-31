@@ -3,7 +3,7 @@
             [clojure.test.check.clojure-test :refer [defspec]]
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as tcgen]
-            [clojure.test.check.properties :as tcprop]
+            [com.gfredericks.test.chuck.properties :refer [for-all]]
             [tnoc.lambda :refer :all]
             [clojure.math.numeric-tower :refer [expt]]))
 
@@ -24,47 +24,47 @@
   (is (= T (normalize `(OR T T)))))
 
 (defspec succ-test
-         (tcprop/for-all [(tcgen/choose 0 1000)]
-                         #(= (inc %) (unchurch (normalize `(SUCC ~%))))))
+         (for-all [x (tcgen/choose 0 1000)]
+                  (= (inc x) (unchurch (normalize `(SUCC ~x))))))
 
 (defspec add-test 20
-         (tcprop/for-all [x (tcgen/choose 0 20) y (tcgen/choose 0 20)]
-                         (= (+ x y) (unchurch (normalize `(ADD ~x ~y))))))
+         (for-all [x (tcgen/choose 0 20) y (tcgen/choose 0 20)]
+                  (= (+ x y) (unchurch (normalize `(ADD ~x ~y))))))
 
 (defspec add'-test 20
-         (tcprop/for-all [x (tcgen/choose 0 20) y (tcgen/choose 0 20)]
-                         (= (+ x y) (unchurch (normalize `(ADD' ~x ~y))))))
+         (for-all [x (tcgen/choose 0 20) y (tcgen/choose 0 20)]
+                  (= (+ x y) (unchurch (normalize `(ADD' ~x ~y))))))
 
 (defspec mult-test 20
-         (tcprop/for-all [x (tcgen/choose 0 20) y (tcgen/choose 0 20)]
-                         (= (* x y) (unchurch (normalize `(MULT ~x ~y))))))
+         (for-all [x (tcgen/choose 0 20) y (tcgen/choose 0 20)]
+                  (= (* x y) (unchurch (normalize `(MULT ~x ~y))))))
 
 (defspec mult'-test 20
-         (tcprop/for-all [x (tcgen/choose 0 20) y (tcgen/choose 0 20)]
-                         (= (* x y) (unchurch (normalize `(MULT' ~x ~y))))))
+         (for-all [x (tcgen/choose 0 20) y (tcgen/choose 0 20)]
+                  (= (* x y) (unchurch (normalize `(MULT' ~x ~y))))))
 
 (defspec expt-test 20
-         (tcprop/for-all [x (tcgen/choose 0 4) y (tcgen/choose 1 4)]
-                         (= (expt x y) (unchurch (normalize `(EXP ~x ~y))))))
+         (for-all [x (tcgen/choose 0 4) y (tcgen/choose 1 4)]
+                  (= (expt x y) (unchurch (normalize `(EXP ~x ~y))))))
 
 (defspec first-test
-         (tcprop/for-all [x (tcgen/choose 0 100) y (tcgen/choose 0 100)]
-                         (= x (unchurch (normalize `(FIRST (PAIR ~x ~y)))))))
+         (for-all [x (tcgen/choose 0 100) y (tcgen/choose 0 100)]
+                  (= x (unchurch (normalize `(FIRST (PAIR ~x ~y)))))))
 
 (defspec second-test
-         (tcprop/for-all [x (tcgen/choose 0 100) y (tcgen/choose 0 100)]
-                         (= y (unchurch (normalize `(SECOND (PAIR ~x ~y)))))))
+         (for-all [x (tcgen/choose 0 100) y (tcgen/choose 0 100)]
+                  (= y (unchurch (normalize `(SECOND (PAIR ~x ~y)))))))
 
 (defspec pred-test
-         (tcprop/for-all [(tcgen/choose 0 100)]
-                         #(= (dec %) (unchurch (normalize `(PRED ~%))))))
+         (for-all [x (tcgen/choose 0 100)]
+                  (= (if (zero? x) 0 (dec x)) (unchurch (normalize `(PRED ~x))))))
 
 (deftest zero-test
   (is (= T (normalize `(ZERO? 0)))))
 
 (defspec not-zero-test
-         (tcprop/for-all [(tcgen/choose 1 100)]
-                         #(= F (normalize `(ZERO? ~%)))))
+         (for-all [x (tcgen/choose 1 100)]
+                  (= F (normalize `(ZERO? ~x)))))
 
 (deftest fac-test
   (is (= 1 (unchurch (normalize `(FAC 0)))))

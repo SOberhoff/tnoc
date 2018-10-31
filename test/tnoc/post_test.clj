@@ -3,7 +3,7 @@
             [tnoc.turing-test :refer :all]
             [clojure.test :refer :all]
             [clojure.test.check.generators :as tcgen]
-            [clojure.test.check.properties :as tcprop]
+            [com.gfredericks.test.chuck.properties :refer [for-all]]
             [clojure.test.check.clojure-test :refer [defspec]]
             [clojure.string :as str]))
 
@@ -24,8 +24,9 @@
         "(ODD)")))
 
 (defspec compile-decompile-to-post-canonical-system-test
-         (tcprop/for-all [[turing-machine configuration] turing-machine-gen]
-                         (->> (compile-to-post-canonical-system turing-machine configuration)
-                              (second)
-                              (decompile-string)
-                              (= configuration))))
+         (for-all [alphabet (tcgen/set tcgen/char-alpha {:min-elements 1})
+                   [turing-machine configuration] (make-turing-machine-gen alphabet)]
+                  (->> (compile-to-post-canonical-system turing-machine configuration)
+                       (second)
+                       (decompile-string)
+                       (= configuration))))

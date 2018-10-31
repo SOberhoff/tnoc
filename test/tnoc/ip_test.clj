@@ -2,7 +2,7 @@
   (:require [tnoc.ip :refer :all]
             [clojure.test :refer :all]
             [clojure.spec.alpha :as spec]
-            [clojure.test.check.properties :as tcprop]
+            [com.gfredericks.test.chuck.properties :refer [for-all]]
             [clojure.test.check.clojure-test :refer [defspec]]
             [clojure.test.check.generators :as tcgen]))
 
@@ -37,23 +37,23 @@
              [polynomial substitutions]))
 
 (defspec simplify-test 5
-         (tcprop/for-all [[polynomial substitutions] polynomial-and-substitutions-gen]
-                         (= (simplify (substitute polynomial substitutions))
-                            (simplify (substitute (simplify polynomial) substitutions)))))
+         (for-all [[polynomial substitutions] polynomial-and-substitutions-gen]
+                  (= (simplify (substitute polynomial substitutions))
+                     (simplify (substitute (simplify polynomial) substitutions)))))
 
 (defspec simplify-non-distributive-test 5
-         (tcprop/for-all [[polynomial substitutions] polynomial-and-substitutions-gen]
-                         (= (simplify (substitute polynomial substitutions))
-                            (simplify (substitute (simplify polynomial false) substitutions)))))
+         (for-all [[polynomial substitutions] polynomial-and-substitutions-gen]
+                  (= (simplify (substitute polynomial substitutions))
+                     (simplify (substitute (simplify polynomial false) substitutions)))))
 
 (defspec arithmetize-simplifying-test 5
-         (tcprop/for-all [formula (spec/gen :tnoc.ip/formula)]
-                         (= (simplify (arithmetize formula))
-                            (arithmetize-simplifying formula))))
+         (for-all [formula (spec/gen :tnoc.ip/formula)]
+                  (= (simplify (arithmetize formula))
+                     (arithmetize-simplifying formula))))
 
 (defspec ip-test 5
-         (tcprop/for-all [formula (spec/gen :tnoc.ip/formula)]
-                         (->> (repeatedly #(rand-int 20))
-                              (interact formula)
-                              (map :verified?)
-                              (every? identity))))
+         (for-all [formula (spec/gen :tnoc.ip/formula)]
+                  (->> (repeatedly #(rand-int 20))
+                       (interact formula)
+                       (map :verified?)
+                       (every? identity))))

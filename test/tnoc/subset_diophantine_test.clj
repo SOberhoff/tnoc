@@ -3,7 +3,7 @@
             [clojure.test :refer [deftest is]]
             [clojure.test.check.clojure-test :refer [defspec]]
             [clojure.test.check.generators :as tcgen]
-            [clojure.test.check.properties :as tcprop]
+            [com.gfredericks.test.chuck.properties :refer [for-all]]
             [tnoc.subset-diophantine :refer :all]
             [clojure.math.numeric-tower :refer [expt sqrt]]))
 
@@ -24,40 +24,40 @@
     (multiple? S (expt 2 m))))
 
 (defspec expr-5-2-test
-         (tcprop/for-all [weights weights-gen
-                          target tcgen/pos-int]
-                         (let [{S :S m :m} (subset-diophantine-constants weights target)]
-                           (= (subset-sum? weights target)
-                              (expr-5-2|5-4? S m (weights-with-odd-sum weights target))))))
+         (for-all [weights weights-gen
+                   target tcgen/pos-int]
+                  (let [{S :S m :m} (subset-diophantine-constants weights target)]
+                    (= (subset-sum? weights target)
+                       (expr-5-2|5-4? S m (weights-with-odd-sum weights target))))))
 
 (defspec expr-5-3-test
-         (tcprop/for-all [[weights index] (tcgen/let [weights weights-gen
-                                                      index (tcgen/choose 0 (dec (count weights)))]
-                                                     [weights index])]
-                         (let [{m :m qs :qs thetas :thetas} (subset-diophantine-constants weights 0)
-                               q (nth qs index)
-                               theta (nth thetas index)]
-                           (and (= (nth weights index) (mod theta (expt 2 m)))
-                                (multiple? theta (reduce *' (map #(expt % m) (remove #{q} qs))))
-                                (not (multiple? theta q))))))
+         (for-all [[weights index] (tcgen/let [weights weights-gen
+                                               index (tcgen/choose 0 (dec (count weights)))]
+                                              [weights index])]
+                  (let [{m :m qs :qs thetas :thetas} (subset-diophantine-constants weights 0)
+                        q (nth qs index)
+                        theta (nth thetas index)]
+                    (and (= (nth weights index) (mod theta (expt 2 m)))
+                         (multiple? theta (reduce *' (map #(expt % m) (remove #{q} qs))))
+                         (not (multiple? theta q))))))
 
 (defspec expr-5-4-test
-         (tcprop/for-all [weights weights-gen
-                          target tcgen/s-pos-int]
-                         (let [{S :S m :m thetas :thetas} (subset-diophantine-constants weights target)]
-                           (= (subset-sum? weights target)
-                              (expr-5-2|5-4? S m thetas)))))
+         (for-all [weights weights-gen
+                   target tcgen/s-pos-int]
+                  (let [{S :S m :m thetas :thetas} (subset-diophantine-constants weights target)]
+                    (= (subset-sum? weights target)
+                       (expr-5-2|5-4? S m thetas)))))
 
 (defspec two-H-less-than-K-test
-         (tcprop/for-all [weights weights-gen]
-                         (let [{H :H K :K} (subset-diophantine-constants weights 0)]
-                           (< (*' 2 H) K))))
+         (for-all [weights weights-gen]
+                  (let [{H :H K :K} (subset-diophantine-constants weights 0)]
+                    (< (*' 2 H) K))))
 
 (defspec qs-dont-divide-H-test
-         (tcprop/for-all [weights weights-gen]
-                         (let [{H  :H
-                                qs :qs} (subset-diophantine-constants weights 0)]
-                           (every? #(not (multiple? H %)) qs))))
+         (for-all [weights weights-gen]
+                  (let [{H  :H
+                         qs :qs} (subset-diophantine-constants weights 0)]
+                    (every? #(not (multiple? H %)) qs))))
 
 (defn find-lemma-5-1 [H K S m]
   (->> (*' H H)
@@ -76,13 +76,13 @@
              [weights target]))
 
 (defspec lemma-5-1-test
-         (tcprop/for-all [[weights target] lemma-5-1-gen]
-                         (let [{H :H
-                                K :K
-                                S :S
-                                m :m} (subset-diophantine-constants weights target)]
-                           (= (empty? (subset-sum weights target))
-                              (empty? (find-lemma-5-1 H K S m))))))
+         (for-all [[weights target] lemma-5-1-gen]
+                  (let [{H :H
+                         K :K
+                         S :S
+                         m :m} (subset-diophantine-constants weights target)]
+                    (= (empty? (subset-sum weights target))
+                       (empty? (find-lemma-5-1 H K S m))))))
 
 (defn get-sigmas [[next-solution & rem-solution :as solution] [next-weight & rem-weights]]
   (if (some? next-weight)
@@ -105,9 +105,9 @@
                            (reduce +))]))
 
 (defspec solvable-subset-diophantine-test
-         (tcprop/for-all [[weights target] solvable-subset-sum-gen]
-                         (let [f (subset-diophantine weights target)
-                               [a b c] (filter number? (flatten f))
-                               X (find-X weights target)
-                               Y (/ (- c (*' a X X)) b)]
-                           ((eval f) X Y))))
+         (for-all [[weights target] solvable-subset-sum-gen]
+                  (let [f (subset-diophantine weights target)
+                        [a b c] (filter number? (flatten f))
+                        X (find-X weights target)
+                        Y (/ (- c (*' a X X)) b)]
+                    ((eval f) X Y))))

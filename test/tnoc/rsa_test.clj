@@ -2,13 +2,14 @@
   (:require [tnoc.rsa :refer :all]
             [clojure.test.check.clojure-test :refer [defspec]]
             [clojure.test.check.generators :as tcgen]
-            [clojure.test.check.properties :as tcprop]))
+            [com.gfredericks.test.chuck.properties :refer [for-all]]
+            ))
 
 
 (defspec string-to-bigint-to-string-test
-         (tcprop/for-all [s tcgen/string-alphanumeric]
-                         (= s (bigints-to-string (string-to-bigints s 8)))))
+         (for-all [s tcgen/string-alphanumeric]
+                  (= s (bigints-to-string (string-to-bigints s 8)))))
 
 (defspec rsa-test
-         (tcprop/for-all [s tcgen/string-alphanumeric]
-                         (= s (decrypt (encrypt-with-new-keys s 64 17)))))
+         (for-all [s tcgen/string-alphanumeric]
+                  (= s (decrypt (encrypt-with-new-keys s 64 17)))))
