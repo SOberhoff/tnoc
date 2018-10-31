@@ -35,21 +35,22 @@
               (last)
               (:state)))))
 
-(def turing-machine-gen
-  (tcgen/let [alphabet (tcgen/set tcgen/char-alphanumeric {:min-elements 2 :max-elements 10})
-              states (tcgen/set tcgen/keyword {:min-elements 1 :max-elements 10})]
-             (let [symbol-gen (tcgen/elements alphabet)
-                   state-gen (tcgen/elements states)
-                   transition-gen (tcgen/tuple symbol-gen (tcgen/elements #{:<< :<> :>>}) state-gen)
-                   transition-fns-gen (tcgen/map symbol-gen transition-gen {:min-elements 1})]
-               (tcgen/let [turing-machine (tcgen/map state-gen transition-fns-gen {:min-elements 1})
-                           initial-state state-gen
-                           tape (tcgen/fmap #(apply str %) (tcgen/vector symbol-gen 1 50))
-                           position (tcgen/choose 0 (dec (count tape)))]
-                          [turing-machine {:state initial-state :tape tape :position position}]))))
+(def binary-turing-machine-gen
+  (tcgen/let [states (tcgen/set (tcgen/fmap (comp keyword str) tcgen/char-alpha-numeric)
+                                {:min-elements 1 :max-elements 10})
+              transition-fns (let [state-gen (tcgen/elements states)
+                                   transition-fn-gen (tcgen/map (tcgen/elements #{\0 \1 \_})
+                                                                (tcgen/tuple (tcgen/elements #{\0 \1 \_})
+                                                                             (tcgen/elements #{:<< :<> :>>})
+                                                                             state-gen))]
+                               (tcgen/vector transition-fn-gen (count states)))]
+             (tcgen/let [initial-state (tcgen/elements states)
+                         tape (tcgen/fmap #(apply str %) (tcgen/vector (tcgen/elements #{\0 \1 \_}) 1 50))
+                         position (tcgen/choose 0 (dec (count tape)))]
+                        [(zipmap states transition-fns) {:state initial-state :tape tape :position position}])))
 
-;(defspec compile-to-U-decompile-test
-;         (tcprop/for-all [[turing-machine configuration] turing-machine-gen]
-;                         (->> (compile-to-U-configuration turing-machine configuration)
-;                              (decompile-from-U-configuration turing-machine)
-;                              (= configuration))))
+(defspec compile-to-U-decompile-test
+         (tcprop/for-all [[turing-machine configuration] binary-turing-machine-gen]
+                         (->> (compile-to-U-configuration turing-machine configuration)
+                              (decompile-from-U-configuration turing-machine)
+                              (= configuration))))
