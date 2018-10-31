@@ -152,32 +152,32 @@
 
    ; figure out in which direction to clean up
    :INIT-CLEAN-O-L  {[\o \i \u] [:>>]
-                     \L         [:<< :<<CLEAN-O-L]
-                     \R         [:>> :>>CLEAN-O-L]}
+                     \l         [:<< :<<CLEAN-O-L]
+                     \r         [:>> :>>CLEAN-O-L]}
    :INIT-CLEAN-O-R  {[\o \i \u] [:>>]
-                     \L         [:<< :<<CLEAN-O-R]
-                     \R         [:>> :>>CLEAN-O-R]}
+                     \l         [:<< :<<CLEAN-O-R]
+                     \r         [:>> :>>CLEAN-O-R]}
    :INIT-CLEAN-O-S  {[\o \i \u] [:>>]
-                     \L         [:<< :<<CLEAN-O-S]
-                     \R         [:>> :>>CLEAN-O-S]}
+                     \l         [:<< :<<CLEAN-O-S]
+                     \r         [:>> :>>CLEAN-O-S]}
    :INIT-CLEAN-I-L  {[\o \i \u] [:>>]
-                     \L         [:<< :<<CLEAN-I-L]
-                     \R         [:>> :>>CLEAN-I-L]}
+                     \l         [:<< :<<CLEAN-I-L]
+                     \r         [:>> :>>CLEAN-I-L]}
    :INIT-CLEAN-I-R  {[\o \i \u] [:>>]
-                     \L         [:<< :<<CLEAN-I-R]
-                     \R         [:>> :>>CLEAN-I-R]}
+                     \l         [:<< :<<CLEAN-I-R]
+                     \r         [:>> :>>CLEAN-I-R]}
    :INIT-CLEAN-I-S  {[\o \i \u] [:>>]
-                     \L         [:<< :<<CLEAN-I-S]
-                     \R         [:>> :>>CLEAN-I-S]}
+                     \l         [:<< :<<CLEAN-I-S]
+                     \r         [:>> :>>CLEAN-I-S]}
    :INIT-CLEAN-U-L  {[\o \i \u] [:>>]
-                     \L         [:<< :<<CLEAN-U-L]
-                     \R         [:>> :>>CLEAN-U-L]}
+                     \l         [:<< :<<CLEAN-U-L]
+                     \r         [:>> :>>CLEAN-U-L]}
    :INIT-CLEAN-U-R  {[\o \i \u] [:>>]
-                     \L         [:<< :<<CLEAN-U-R]
-                     \R         [:>> :>>CLEAN-U-R]}
+                     \l         [:<< :<<CLEAN-U-R]
+                     \r         [:>> :>>CLEAN-U-R]}
    :INIT-CLEAN-U-S  {[\o \i \u] [:>>]
-                     \L         [:<< :<<CLEAN-U-S]
-                     \R         [:>> :>>CLEAN-U-S]}
+                     \l         [:<< :<<CLEAN-U-S]
+                     \r         [:>> :>>CLEAN-U-S]}
 
    ; clean up to the left
    :<<CLEAN-O-L     {[\o \i \u \l \r \s \t \b \c] [:<<]
@@ -283,38 +283,38 @@
 (defn- serialize-state [turing-machine state]
   "Creates a string representing the given state.
   Example: lilllcrorrrbta"
-  (str (serialize-transition turing-machine state \0)
+  (str (serialize-transition turing-machine state \_)
        \c
        (serialize-transition turing-machine state \1)
        \b
-       (serialize-transition turing-machine state \_)
+       (serialize-transition turing-machine state \0)
        \a))
 
-(defn- mark [string index]
-  (str (subs string 0 index)
-       (case (.charAt string index)
-         \o \O, \i \I, \u \U, \l \L, \r \R, \a \A)
-       (subs string (inc index))))
+(defn- serialize-states [turing-machine state]
+  "Creates a string representing all the states of the given Turing machine and marks the given state
+  as the current state.
+  Example: tcrirrbrorAtcrilbrora"
+  (->> (keys turing-machine)
+       (map #(let [state-string (serialize-state turing-machine %)]
+               (if (= state %)
+                 (str (subs state-string 0 (dec (count state-string))) \A)
+                 state-string)))
+       (str/join)))
 
-(defn- serialize-turing-machine [turing-machine {state :state tape :tape position :position}]
-  "Takes a Turing machine together with a configuration and produces a string that can be placed
-  on the tape of the universal machine U."
-  (let [compiled-states (str (->> (keys turing-machine)
-                                  (map #(let [state-string (serialize-state turing-machine %)]
-                                          (if (= state %)
-                                            (mark state-string (dec (count state-string)))
-                                            state-string)))
-                                  (str/join)))
-        compiled-tape (mark (apply str (map #(case % \0 \o \1 \i \_ \u) tape)) position)]
-    (str compiled-states compiled-tape)))
+(defn- serialize-tape [tape]
+  "Takes a tape with symbols from the binary alphabet {0, 1, _} and creates a tape segment for
+  the universal Turing machine U.
+  Example oiooiuui"
+  (apply str (map #(case % \0 \o \1 \i \_ \u) tape)))
 
-(defn compile-to-U-configuration [turing-machine configuration]
+(defn compile-to-U-configuration [turing-machine {state :state tape :tape position :position}]
   "Compiles a Turing machine together with a configuration into a configuration for the universal
   Turing machine U."
-  (let [tape (serialize-turing-machine turing-machine configuration)]
-    {:state    :WRITE?
-     :tape     tape
-     :position (max (.indexOf tape "O") (.indexOf tape "I") (.indexOf tape "U"))}))
+  (let [state-segment (serialize-states turing-machine state)
+        tape-segment (serialize-tape tape)]
+    {:state    :READ
+     :tape     (str state-segment tape-segment)
+     :position (+ position (count state-segment))}))
 
 (defn decompile-from-U-configuration [turing-machine {U-tape :tape}]
   "Reproduces the configuration of the given Turing machine from the given configuration of the

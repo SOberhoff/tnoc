@@ -54,3 +54,15 @@
                          (->> (compile-to-U-configuration turing-machine configuration)
                               (decompile-from-U-configuration turing-machine)
                               (= configuration))))
+
+(defn- run-for-n-steps-on-U [turing-machine configuration n]
+  (->> (compile-to-U-configuration turing-machine configuration)
+       (run-turing-machine U)
+       (filter #(= :READ (% :state)))
+       (#(nth % n nil))
+       (#(if % (decompile-from-U-configuration turing-machine %)))))
+
+(defspec run-on-U-test 10
+         (tcprop/for-all [[turing-machine configuration] binary-turing-machine-gen]
+                         (= (nth (run-turing-machine turing-machine configuration) 10 nil)
+                            (run-for-n-steps-on-U turing-machine configuration 10))))
