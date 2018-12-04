@@ -191,13 +191,14 @@
 (defn- interact-once [formula substitutions]
   "Produces a map containing the given formula, Merlin's claim and proof, as well as a boolean
   indicating whether Arthur was able to verify Merlin's claim."
-  (if (= (free-variables formula) (into #{} (keys substitutions)))
+  (if (every? (into #{} (keys substitutions)) (free-variables formula))
     (let [[claim proof] (merlin formula substitutions)
           verified? (arthur formula claim proof substitutions)]
-      {:formula   formula
-       :claim     claim
-       :proof     proof
-       :verified? verified?})))
+      {:formula       formula
+       :substitutions substitutions
+       :claim         claim
+       :proof         proof
+       :verified?     verified?})))
 
 (defn interact [formula test-ints]
   "Produces a list of tuples containing the sub-formula that's currently being verified, Merlin's
@@ -218,14 +219,14 @@
                  test-ints
                  (conj interactions (interact-once formula substitutions))))))))
 
-(defn pprint [polynomial]
+(defn pprint-polynomial [polynomial]
   "Converts a polynomial into a more readable string."
   (cond
     (number? polynomial) (str polynomial)
     (keyword? polynomial) (name polynomial)
 
     (spec/valid? ::exponentiation polynomial)
-    (str (pprint (nth polynomial 1)) "^" (nth polynomial 2))
+    (str (pprint-polynomial (nth polynomial 1)) "^" (nth polynomial 2))
 
     (spec/valid? ::product polynomial)
     (let [[coefficient factors] (separate-coefficient (rest polynomial))
@@ -233,20 +234,21 @@
                                  "-"
                                  (str coefficient))
           pprinted-factors (->> factors
-                                (map #(if (spec/valid? ::sum %) (str "(" (pprint %) ")") (pprint %)))
+                                (map #(if (spec/valid? ::sum %) (str "(" (pprint-polynomial %) ")") (pprint-polynomial %)))
                                 (apply str))]
       (str pprinted-coefficient pprinted-factors))
 
     (spec/valid? ::sum polynomial)
-    (->> (map pprint (rest polynomial))
+    (->> (map pprint-polynomial (rest polynomial))
          (reduce #(if (str/starts-with? %2 "-") (str %1 " - " (subs %2 1)) (str %1 " + " %2))))))
 
-(defn pprint-interaction [{formula :formula  claim :claim proof :proof verified? :verified?}]
+(defn pprint-interaction [{formula :formula substitutions :substitutions claim :claim proof :proof verified? :verified?}]
   "Pretty-prints both the claim and proof in the given interaction."
-  {:formula formula
-   :claim (pprint claim)
-   :proof (pprint proof)
-   :verified? verified?})
+  {:formula       formula
+   :substitutions substitutions
+   :claim         (pprint-polynomial claim)
+   :proof         (pprint-polynomial proof)
+   :verified?     verified?})
 
 (defn interact-manually [formula]
   "Starts an interactive proof in the console where the test integers can be passed in and used for

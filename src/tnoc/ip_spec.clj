@@ -134,7 +134,7 @@
                            :test-ints (spec/coll-of integer? :kind sequential?))
            :ret (spec/coll-of ::interaction :kind sequential?))
 
-(spec/fdef pprint
+(spec/fdef pprint-polynomial
            :args (spec/cat :polynomial (spec/nilable ::polynomial))
            :ret string?)
 
